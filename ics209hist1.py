@@ -354,9 +354,10 @@ def historical1_merge_prep():
     dfIDxref.columns = ['II_EVENT_ID','II_REPDATE','INCIDENT_ID','FIRE_EVENT_ID']
     df_str_ext = _get_str_ext(dfIDxref)
     df_ext = pd.merge(df,df_str_ext,on=['INCIDENT_ID','REPDATE'],how='left')
-    print(df_ext.shape)
     df_res_ext = _get_res_ext(dfIDxref)
     df_ext = pd.merge(df_ext,df_res_ext,on=['INCIDENT_ID','REPDATE'],how='left')
+
+    print("Historical System 1 merge preparation complete {}".format(df_ext.shape))
     
     df_ext.to_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}_cleaned.csv'.format(lgcy_timespan))
     
