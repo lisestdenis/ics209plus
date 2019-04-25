@@ -110,7 +110,7 @@ def _derive_new_fields(df):
 def _create_incident_id(df):
     dfinc = df.sort_values(['INC_IDENTIFIER','REPORT_TO_DATE']).groupby('INC_IDENTIFIER').nth(-1).reset_index()
     dfinc['INCIDENT_ID'] = dfinc.START_YEAR.astype(str) + '_' + dfinc.INCIDENT_NUMBER.astype(str).str.strip() + '_' + \
-                        dfinc.INCIDENT_NAME.astype(str).str.upper().str.strip()
+                        dfinc.INCIDENT_NAME.astype(str).str.strip().str.upper()
     g1 = dfinc.groupby(['INCIDENT_ID']).size().reset_index(name="num_rows")
     print("Duplicate INC Incident Identifiers:")
     print(g1.loc[g1.num_rows>1])
@@ -282,7 +282,6 @@ def current_merge_prep():
     df_ext = pd.merge(df_ext,df_res_ext,on=['INC209R_IDENTIFIER'],how='left')
     df_cslty_ext = _get_curr_cslty_ext(lu_df)
     df_ext = pd.merge(df_ext,df_cslty_ext,on=['INC209R_IDENTIFIER'],how='left')
-    print ("after ext:")
-    print(df.REPORT_TO_DATE.str[:4].value_counts())
+    print("Current System merge preparation complete. {}".format(df_ext.shape))
     
     df_ext.to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_REPORTS_{}_cleaned.csv'.format(curr_timespan))
