@@ -453,4 +453,5 @@ def historical2_merge_prep():
     df_ext = pd.merge(df,df_str_ext,on=['INCIDENT_ID','REPORT_TO_DATE'],how='left')
     df_res_ext = _get_res_ext(dfIDxref)
     df_ext = pd.merge(df_ext,df_res_ext,on=['INCIDENT_ID','REPORT_TO_DATE'],how='left')
+    print("Historical System 2 Merge preparation complete. {}".format(df_ext.shape))
     df_ext.to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv'.format(hist_timespan))
