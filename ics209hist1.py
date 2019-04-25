@@ -233,7 +233,7 @@ def _ks_merge_purge_duplicates(df):
     
     # Save file with deleted records:
     df_notinKS = df.loc[df.INCIDENT_ID.isnull() & df.ITYPE.isin(['WF','WFU'])]
-    df_notinKS.to_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}_deleted.csv'.format(lgcy_timespan)) 
+    df_notinKS.to_csv('../../data/out/ics209_sitreps_deleted_hist1_{}.csv'.format(lgcy_timespan)) 
     # Save file merged with KS records as cleanedKS version
     df = df.loc[~df.INCIDENT_ID.isnull() | ~df.ITYPE.isin(['WF','WFU'])]
     df.loc[~df.ITYPE.isin(['WF','WFU']),'INCIDENT_ID'] = df.START_YEAR.astype(int).astype(str) + '_' \
