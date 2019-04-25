@@ -654,18 +654,18 @@ def create_final_datasets():
     df = _calculate_fire_statistics(df)
     
     # save merged/cleaned versions
-    df.to_csv('../../data/out/ics209plus_allsitreps{}.csv'.format(final_timespan))
+    df.to_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan))
     print(df.shape)
     wfdf = df.loc[df.INCTYP_ABBREVIATION.isin(['WF','WFU','RX'])]
     wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE'])
     print(wfdf.shape)
-    wfdf.to_csv('../../data/out/ics209plus_allWFsitreps{}.csv'.format(final_timespan))
+    wfdf.to_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan))
     
     # create the incident level summary
     inc_df = _create_incident_summary(wfdf)
-    inc_df.to_csv('../../data/out/ics209plus_allWFincidents{}.csv'.format(final_timespan))
+    inc_df.to_csv('../../data/out/ics209-plus-wf_incidents_{}.csv'.format(final_timespan))
     
     # create complex associations table from short dataset
     cpx_df = _create_complex_associations()
-    cpx_df.to_csv('../../data/out/ics209plus_complex_assocs{}.csv'.format(allhist_timespan))
+    cpx_df.to_csv('../../data/out/ics209-plus-wf_complex_assocs_{}.csv'.format(allhist_timespan))
 
