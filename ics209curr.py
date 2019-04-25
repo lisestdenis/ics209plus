@@ -110,7 +110,7 @@ def _derive_new_fields(df):
 def _create_incident_id(df):
     dfinc = df.sort_values(['INC_IDENTIFIER','REPORT_TO_DATE']).groupby('INC_IDENTIFIER').nth(-1).reset_index()
     dfinc['INCIDENT_ID'] = dfinc.START_YEAR.astype(str) + '_' + dfinc.INCIDENT_NUMBER.astype(str).str.strip() + '_' + \
-                        dfinc.INCIDENT_NAME.astype(str).str.upper.str.strip()
+                        dfinc.INCIDENT_NAME.astype(str).str.upper().str.strip()
     g1 = dfinc.groupby(['INCIDENT_ID']).size().reset_index(name="num_rows")
     print("Duplicate INC Incident Identifiers:")
     print(g1.loc[g1.num_rows>1])
