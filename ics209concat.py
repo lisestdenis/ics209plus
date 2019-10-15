@@ -120,11 +120,13 @@ def concatenate_annual_files():
             
     # concatenate individual files and save to csv
     pd.concat(lgcy_sitrep_data).to_csv("../../data/out/IMSR_INCIDENT_INFORMATIONS_{}.csv".format(lgcy_timespan))
-    pd.concat(lgcy_resource_data).to_csv("../../data/out/IMSR_INCIDENT_RESOURCES_{}.csv".format(lgcy_timespan))
+    pd.concat(lgcy_resource_data,sort=True).to_csv("../../data/out/IMSR_INCIDENT_RESOURCES_{}.csv".format(lgcy_timespan))
     pd.concat(lgcy_structure_data).to_csv("../../data/out/IMSR_INCIDENT_STRUCTURES_{}.csv".format(lgcy_timespan))
-    pd.concat(hist_sitrep_data).to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}.csv'.format(hist_timespan))
-    pd.concat(hist_resource_data).to_csv('../../data/out/IMSR_IMSR_209_INCIDENT_RESOURCES_{}.csv'.format(hist_timespan))
-    pd.concat(hist_structure_data).to_csv('../../data/out/IMSR_IMSR_209_INCIDENT_STRUCTURES_{}.csv'.format(hist_timespan))
+    pd.concat(hist_sitrep_data,sort=True).to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}.csv'.format(hist_timespan))
+    pd.concat(hist_resource_data,sort=True).to_csv('../../data/out/IMSR_IMSR_209_INCIDENT_RESOURCES_{}.csv'\
+                                                   .format(hist_timespan))
+    pd.concat(hist_structure_data,sort=True).to_csv('../../data/out/IMSR_IMSR_209_INCIDENT_STRUCTURES_{}.csv'\
+                                                    .format(hist_timespan))
     pd.concat(hist_complex_data).to_csv('../../data/out/IMSR_IMSR_209_COMPLEX_{}.csv'.format(hist_timespan))
     pd.concat(hist_lookup_data).to_csv('../../data/out/IMSR_LOOKUPS.csv')
     pd.concat(curr_incident_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENTS_{}.csv'.format(curr_timespan))
@@ -147,7 +149,7 @@ def concatenate_annual_files():
     common_data = ["COMMONDATA_NWCG_AGENCIES","COMMONDATA_NWCG_UNITS","COMMONDATA_STATES"]
     for d in common_data:
         xlPath = "../../data/raw/excel/2014/{}.xlsx".format(d)
-        xl = pd.ExcelFile(xlPath, parse_dates=True)
+        xl = pd.ExcelFile(xlPath)
         df = xl.parse(0)
         df.to_csv("../../data/out/{}_2014.csv".format(d))
     

@@ -250,4 +250,17 @@ def combine_text_fields(df, *args):
     combined_field = parsed_df_subset.apply(lambda x: '|'.join(x), axis = 1)
     return combined_field.apply(unique_members)
 
+def get_largest_fod_rec(fod_list):
+    
+    lrg_ptr = fod_list[0]
+    lrg_ptr = eval(lrg_ptr)
+    lrg_size = lrg_ptr.get("SIZE")
+    if len(fod_list) > 1:
+        for j in range(0, len(fod_list)-1):
+            curr_ptr = eval(fod_list[j])
+            curr_size = curr_ptr.get("SIZE")
+            if curr_size > lrg_size:
+                lrg_ptr = curr_ptr
+                lrg_size = curr_size 
+    return lrg_ptr
 

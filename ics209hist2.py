@@ -4,7 +4,7 @@ import numpy as np
 
 hist_timespan = '2001to2013'
 
-def _split_duplicate_incident_ids(df):
+def _split_duplicate_incident_numbers(df):
     df['SEQ_NUM'] = "1"
     
     # fix incident number errors
@@ -57,6 +57,7 @@ def _split_duplicate_incident_ids(df):
     df.loc[((df['INCIDENT_NUMBER'] == "ID-IPF-004019") & (df['INCIDENT_NAME'] == "Little Devil")), 'SEQ_NUM'] = "2"
     df.loc[((df['INCIDENT_NUMBER'] == "OK-OKS-") & (df['INCIDENT_NAME'] == "Lone Pine")), 'SEQ_NUM'] = "2"
     df.loc[((df['INCIDENT_NUMBER'] == "OK-OKS-") & (df['INCIDENT_NAME'] == "Lone Pine")), 'SEQ_NUM'] = "2"
+    df.loc[((df['INCIDENT_NUMBER'] == "OK-OKS-40021") & (df['INCIDENT_NAME'] == "Elmore City")), 'SEQ_NUM'] = "2"
     df.loc[((df['INCIDENT_NUMBER'] == "OR-UPF-008083") & (df['INCIDENT_NAME'] == "Rattle Fire")), 'SEQ_NUM'] = "2"
     df.loc[((df['INCIDENT_NUMBER'] == "TX-TXS-000016") & (df['INCIDENT_NAME'] == "EDWARDS COMPLEX")), 'SEQ_NUM'] = "2"
     df.loc[((df['INCIDENT_NUMBER'] == "TX-TXS-00013") & (df['INCIDENT_NAME'] == "Calvert Creek")), 'SEQ_NUM'] = "2"
@@ -102,7 +103,7 @@ def _clean_and_format_date_and_time_fields(df):
     
 def _derive_new_fields(df):
     # Fire Event ID
-    df.loc[df.TYPE_INC.isin(['WF','WFU']),'FIRE_EVENT_ID'] = df.INCIDENT_NUMBER.astype(str).str.strip() + "|" + \
+    df.loc[df.TYPE_INC.isin(['WF','WFU','RX']),'FIRE_EVENT_ID'] = df.INCIDENT_NUMBER.astype(str).str.strip() + "|" + \
                df.START_YEAR.astype(int).astype(str) + "|" + df.SEQ_NUM
     
     # ACRES
@@ -163,6 +164,7 @@ def _derive_new_fields(df):
     return df
     
 def _general_field_cleaning(df):
+    
     # estimated final area (remove non-numeric characters)
     df['EST_FINAL_AREA'] = df['EST_FINAL_AREA'].str.replace('\D','')
     
@@ -170,9 +172,6 @@ def _general_field_cleaning(df):
     df['LINE_TO_BUILD_NUM'] = df['LINE_TO_BUILD'].str.extract('([\d\,\.]+)',expand=False)
     df['LINE_TO_BUILD_NUM'] = df['LINE_TO_BUILD_NUM'].str.replace(',','')
     df['LINE_TO_BUILD_NUM'] = df['LINE_TO_BUILD_NUM'].astype('float64')
-    
-    # change sign of longitude if positive
-    df.loc[df['LONGITUDE'] > 0, 'LONGITUDE'] = df.LONGITUDE * -1
     
     # upper case incident name
     df['INCIDENT_NAME'] = df['INCIDENT_NAME'].str.upper()
@@ -227,6 +226,8 @@ def _standardized_fields(df):
     ss = {'C': 'Confine', 'FS': 'Full Suppression','PZP': 'Point Zone Protection', 'M': 'Monitor'}
     df['SUPPRESSION_METHOD_FULLNAME'] = df['SUPPRESSION_METHOD'].map(ss)
     
+    # fix erroneous incident type
+    df.loc[df.INCIDENT_NUMBER=='OH-WAF-01', 'TYPE_INC'] = 'OT'
     itidmap = {'EQ':9855,'FL':9856,'HM':9858,'HU':9860,'TO':9867,'WF':9851,'WFU':1,'RX':2,'SAR':9864,'OT':9925,\
           'LE':9863,'STR':9925,'MC':9925,'USR':9864,'BAR':9925,'OS':9925}
     df['INCTYP_IDENTIFIER'] = df['TYPE_INC'].map(itidmap)
@@ -252,7 +253,7 @@ def _ks_merge_purge_duplicates(df):
     df = df.drop_duplicates()
     df.to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv'.format(hist_timespan))
     
-    df_short = pd.read_excel('../../data/raw/excel/Short1999to2013.xlsx')
+    df_short = pd.read_excel('../../data/raw/excel/Short1999to2013v2.xlsx')
     df_short['INCIDENT_NAME'] = df_short['INCIDENT_NAME'].astype(str)
     df_short['INCIDENT_NUMBER'] = df_short['INCIDENT_NUMBER'].astype(str)
     df_short = df_short.drop_duplicates()
@@ -283,12 +284,49 @@ def _ks_merge_purge_duplicates(df):
     return df
 
 def _latitude_longitude_updates(df):
-    hist_loc = pd.read_csv('../../data/raw/latlong_clean/historical_cleaned_ll.csv')
+    hist_loc = pd.read_csv('../../data/raw/latlong_clean/historical_cleaned_ll-fod.csv')
     hist_loc = hist_loc.loc[:, ~hist_loc.columns.str.contains('^Unnamed')]
     df = df.merge(hist_loc, on=['FIRE_EVENT_ID'],how='left')
+    # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
-    df.loc[df.lat_c.notnull(),'LATITUDE'] = df.lat_c
-    df.loc[df.long_c.notnull(),'LONGITUDE'] = df.long_c
+    # Case #1: Update lat/long
+    df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'LATITUDE'] = df.lat_c # set latitude to nan
+    df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'LONGITUDE'] = df.long_c # set longitude to nan
+    # Case #2: Unable to fix so set to null
+    df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LATITUDE'] = np.nan # set latitude to nan
+    df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LONGITUDE'] = np.nan # set longitude to nan
+    df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LL_CONFIDENCE'] = 'N'
+    
+    # All-hazards lat/long fixes (primarily Hurricane)
+    df.loc[df.INCIDENT_ID=='2002_CA-OSC-226_SUPER TYPHOON PONGSONA','LATITUDE'] = 7.4497222
+    df.loc[df.INCIDENT_ID=='2002_CA-OSC-226_SUPER TYPHOON PONGSONA','LONGITUDE'] = 151.864444
+    df.loc[df.INCIDENT_ID=='2002_CA-OSC-226_SUPER TYPHOON PONGSONA','LL_CONFIDENCE'] = 'M'
+    df.loc[df.INCIDENT_ID=='2002_CA-OSC-226_SUPER TYPHOON PONGSONA','LL_UPDATE'] = True
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA','LATITUDE'] = 35.9082
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA','LONGITUDE'] = -75.6757
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA','LL_CONFIDENCE'] = 'H'
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA','LL_UPDATE'] = True
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA\/CALO','LATITUDE'] = 35.9082
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA\/CALO','LONGITUDE'] = -75.6757
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA\/CALO','LL_CONFIDENCE'] = 'H'
+    df.loc[df.INCIDENT_ID=='2003_VA-EIC-000002_ISABEL RECOVERY -CAHA\/CALO','LL_UPDATE'] = True
+    df.loc[df.INCIDENT_ID=='2004_FL-BIP-04001_HURRICANE CHARLEY','LATITUDE'] = 25.4687
+    df.loc[df.INCIDENT_ID=='2004_FL-BIP-04001_HURRICANE CHARLEY','LONGITUDE'] = -80.4776
+    df.loc[df.INCIDENT_ID=='2004_FL-BIP-04001_HURRICANE CHARLEY','LL_CONFIDENCE'] = 'H'
+    df.loc[df.INCIDENT_ID=='2004_FL-BIP-04001_HURRICANE CHARLEY','LL_UPDATE'] = True
+    df.loc[df.INCIDENT_ID=='2005_CA-RRU-105076_SCHOOL','LATITUDE'] = 33.5025 #hazmat
+    df.loc[df.INCIDENT_ID=='2005_CA-RRU-105076_SCHOOL','LONGITUDE'] = -117.1168
+    df.loc[df.INCIDENT_ID=='2005_CA-RRU-105076_SCHOOL','LL_CONFIDENCE'] = 'H'
+    df.loc[df.INCIDENT_ID=='2005_CA-RRU-105076_SCHOOL','LL_UPDATE'] = True
+    df.loc[df.INCIDENT_ID=='2005_FL-FEM-000001_DENNIS PREPAREDNESS HOMESTEAD','LATITUDE'] = 25.4687
+    df.loc[df.INCIDENT_ID=='2005_FL-FEM-000001_DENNIS PREPAREDNESS HOMESTEAD','LONGITUDE'] = -80.4776
+    df.loc[df.INCIDENT_ID=='2005_FL-FEM-000001_DENNIS PREPAREDNESS HOMESTEAD','LL_CONFIDENCE'] = 'H'
+    df.loc[df.INCIDENT_ID=='2005_FL-FEM-000001_DENNIS PREPAREDNESS HOMESTEAD','LL_UPDATE'] = True
+    df.loc[df.INCIDENT_ID=='2007_WA-OLF-000299_OLF STORM07','LATITUDE'] = 47.7501
+    df.loc[df.INCIDENT_ID=='2007_WA-OLF-000299_OLF STORM07','LONGITUDE'] = -123.751
+    df.loc[df.INCIDENT_ID=='2007_WA-OLF-000299_OLF STORM07','LL_CONFIDENCE'] = 'H'
+    df.loc[df.INCIDENT_ID=='2007_WA-OLF-000299_OLF STORM07','LL_UPDATE'] = True
+   
     return df
 
 def _get_str_ext(dfh_xref):
@@ -314,6 +352,7 @@ def _get_str_ext(dfh_xref):
     dfh_str['REPORT_TO_DATE'] = pd.to_datetime(dfh_str.REPORT_TO_DATE, errors='coerce')
     dfh_str = dfh_str.drop('IM_HOUR',axis=1)
     dfh_str.columns = dfh_str.columns.str.replace('IM_INCIDENT_NUMBER','INCIDENT_NUMBER')
+    dfh_xref['REPORT_TO_DATE'] = pd.to_datetime(dfh_xref.REPORT_TO_DATE, errors='coerce')
 
     # perform the merge with UID
     dfh_str = dfh_str.merge(dfh_xref,on=['INCIDENT_NUMBER','REPORT_TO_DATE'],how='left')
@@ -436,22 +475,26 @@ def _get_res_ext(uid_xref):
     return dfh_res_ext
     
 def historical2_merge_prep():
-    df = pd.read_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}.csv'.format(hist_timespan))
+    df = pd.read_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}.csv'.format(hist_timespan),low_memory=False)
     df_lu = pd.read_csv('../../data/out/IMSR_LOOKUPS.csv')
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     df = _clean_and_format_date_and_time_fields(df)
-    df = _split_duplicate_incident_ids(df)
+    df = _split_duplicate_incident_numbers(df)
     df = _derive_new_fields(df)
     df = _general_field_cleaning(df)
     df = _standardized_fields(df)
     df = _ks_merge_purge_duplicates(df)
+    df = _latitude_longitude_updates(df)
     
     # create id xref and join data from related tables
     dfIDxref = df[['INCIDENT_NUMBER','REPORT_TO_DATE','INCIDENT_ID','FIRE_EVENT_ID']]
     dfIDxref = dfIDxref.drop_duplicates()
+    
     df_str_ext = _get_str_ext(dfIDxref)
+    df['REPORT_TO_DATE'] = pd.to_datetime(df.REPORT_TO_DATE, errors='coerce')
     df_ext = pd.merge(df,df_str_ext,on=['INCIDENT_ID','REPORT_TO_DATE'],how='left')
     df_res_ext = _get_res_ext(dfIDxref)
     df_ext = pd.merge(df_ext,df_res_ext,on=['INCIDENT_ID','REPORT_TO_DATE'],how='left')
     print("Historical System 2 Merge preparation complete. {}".format(df_ext.shape))
     df_ext.to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv'.format(hist_timespan))
+    

@@ -4,17 +4,24 @@ import numpy as np
 
 lgcy_timespan = '1999to2002'
 
-def _split_duplicate_incident_ids(df):
+def _split_duplicate_incident_numbers(df):
     # set to string and set default seq number to 1
     df.EVENT_ID = df.EVENT_ID.apply(str)
     df['SEQ_NUM'] = "1"
+    #df['ENAME'] = df.ENAME.astype(str).str.strip()
     
-    # fix incident number errors
-    df.loc[df['ENAME'] == "Kirk Complex",'EVENT_ID'] = "CA-LPF-865" #delete 0 before inc#
+    # fix incident number errors & issues to fix joins with FOD
+    df.loc[df['ENAME'] == "Kirk Complex",'EVENT_ID'] = "CA-LPF-865" 
+    df.loc[df['ENAME'] == "Holser",'EVENT_ID'] = "CA-RSS-18889" # fix to join with FOD
+    df.loc[df['ENAME'] == "NORTH SHORE KENAI LAKE",'EVENT_ID'] = "AK-CGF-00082"
+    
+    df.loc[df.EVENT_ID=='MN-MNS-','ITYPE'] = 'WF' # fix issue with hurricanes in April in MN with FIRE in name
+    
     df.loc[((df['EVENT_ID'] == "CA-MVU1024") &(df['ENAME'] == "GAVILAN")),'EVENT_ID'] = "CA-MVU-1024" #add missing -
     df.loc[((df['EVENT_ID'] == "FL-FLS-") & (df['ENAME'] == "Flowers")), 'EVENT_ID'] = "FL-FLS-00029"
     df.loc[((df['EVENT_ID'] == "MT-KNF-") & (df['ENAME'] == "Troy South")), 'EVENT_ID'] = "MT-KNF-1011"
     df.loc[((df['EVENT_ID'] == "NM-4NS-") & (df['ENAME'] == 'Manuelitas')), 'EVENT_ID'] = "NM-4NS-139"
+    df.loc[((df['EVENT_ID'] == "NM-4NS-") & (df['ENAME'] == 'MANUELITAS')), 'EVENT_ID'] = "NM-4NS-139"
     df.loc[((df['EVENT_ID'] == "OR-VAD-") & (df['ENAME'] == "Baker Complex")), 'EVENT_ID'] = "OR-VAD-225"
     df.loc[(df['EVENT_ID'] == '020299'),'EVENT_ID'] = 'CA-RRU-020299' # CAJALCO one sitrep incomplete
     df.loc[(df['EVENT_ID'] == '12700'),'EVENT_ID'] = 'CA-BTU-12700' # 70 Fire
@@ -28,7 +35,7 @@ def _split_duplicate_incident_ids(df):
     df.loc[((df['EVENT_ID'] == "FL-FLS-99029") & (df['ENAME'] == "Bardin")), 'SEQ_NUM'] = "2"
     df.loc[((df['EVENT_ID'] == "FL-FNF-011002") & (df['ENAME'] == "DELUTH 22")), 'SEQ_NUM'] = "2"
     df.loc[((df['EVENT_ID'] == "FL-FNF-011002") & (df['ENAME'] == "Egret 28")), 'SEQ_NUM'] = "3"
-    df.loc[((df['EVENT_ID'] == "FL-FNF-011002") & (df['ENAME'] == "Shanty 32")), 'SEQ_NUM'] = "3"
+    df.loc[((df['EVENT_ID'] == "FL-FNF-011002") & (df['ENAME'] == "Shanty 32")), 'SEQ_NUM'] = "4"
     df.loc[((df['EVENT_ID'] == "LA-LAS-011008") & (df['ENAME'] == "Twin Lakes")), 'SEQ_NUM'] = "2"
     df.loc[((df['EVENT_ID'] == "MN-MNS-") & (df['ENAME'] == "Andover Fire")), 'SEQ_NUM'] = "2" #1999
     df.loc[((df['EVENT_ID'] == "MN-MNS-") & (df['ENAME'] == "Turtle Bay Complex")), 'SEQ_NUM'] = "2" #2000
@@ -39,7 +46,9 @@ def _split_duplicate_incident_ids(df):
     df.loc[((df['EVENT_ID'] == "NM-N3S-") & (df['ENAME'] == "Harley")), 'SEQ_NUM'] = "3" #1999
     df.loc[((df['EVENT_ID'] == "NM-4NS-") & (df['ENAME'] == "CURRY RD. 3")), 'SEQ_NUM'] = "2"
     df.loc[((df['EVENT_ID'] == "NM-4NS-") & (df['ENAME'] == "River")), 'SEQ_NUM'] = "3"
+    df.loc[((df['EVENT_ID'] == "NM-4NS-") & (df['ENAME'] == "RIVER")), 'SEQ_NUM'] = "3"
     df.loc[((df['EVENT_ID'] == "NM-4NS-") & (df['ENAME'] == "Bell")), 'SEQ_NUM'] = "4"
+    df.loc[((df['EVENT_ID'] == "NM-4NS-") & (df['ENAME'] == "BELL")), 'SEQ_NUM'] = "4"
     df.loc[((df['EVENT_ID'] == "NV-CCD-") & (df['ENAME'] == "Cottonwood")), 'SEQ_NUM'] = "4"
     df.loc[((df['EVENT_ID'] == "OK-OKS-") & (df['ENAME'] == "Round Mountain Fire")), 'SEQ_NUM'] = "4"
     df.loc[((df['EVENT_ID'] == "PA-PAS-001") & (df['ENAME'] == "HUCKLEBERRY ROAD")), 'SEQ_NUM'] = "2"
@@ -146,7 +155,7 @@ def _clean_and_format_date_and_time_fields(df):
 
 def _derive_new_fields(df):
     # fire Event ID
-    df.loc[df.ITYPE.isin(['WF','WFU']),'FIRE_EVENT_ID'] = df.EVENT_ID.astype(str).str.strip() + "|" + \
+    df.loc[df.ITYPE.isin(['WF','WFU','RX']),'FIRE_EVENT_ID'] = df.EVENT_ID.astype(str).str.strip() + "|" + \
                df.START_YEAR.astype(int).astype(str) + "|" + df.SEQ_NUM
     
     # POO_LATITUDE/POO_LONGITUDE decimal version to replace deg/min format
@@ -216,7 +225,7 @@ def _ks_merge_purge_duplicates(df):
     df = df.drop_duplicates()
     
     # read in KS dataset and drop duplicates
-    df_short = pd.read_excel('../../data/raw/excel/Short1999to2013.xlsx')
+    df_short = pd.read_excel('../../data/raw/excel/Short1999to2013v2.xlsx')
     df_short['INCIDENT_NAME'] = df_short['INCIDENT_NAME'].astype(str)
     df_short['INCIDENT_NUMBER'] = df_short['INCIDENT_NUMBER'].astype(str)
     df_short = df_short.drop_duplicates()
@@ -245,12 +254,19 @@ def _ks_merge_purge_duplicates(df):
     return df
     
 def _latitude_longitude_updates(df):
-    leg_loc = pd.read_csv('../../data/raw/latlong_clean/legacy_cleaned_ll.csv')
+    leg_loc = pd.read_csv('../../data/raw/latlong_clean/legacy_cleaned_ll-fod.csv')
     leg_loc = leg_loc.loc[:, ~leg_loc.columns.str.contains('^Unnamed')]
     df = df.merge(leg_loc, on=['FIRE_EVENT_ID'],how='left')
+    # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
-    df.loc[df.lat_c.notnull(),'POO_LATITUDE'] = df.lat_c
-    df.loc[df.long_c.notnull(),'POO_LONGITUDE'] = df.long_c
+    # Case #1: Update lat/long
+    df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'POO_LATITUDE'] = df.lat_c # set latitude to nan
+    df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'POO_LONGITUDE'] = df.long_c # set longitude to nan
+    # Case #2: Unable to fix so set to null
+    df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'POO_LATITUDE'] = np.nan # set latitude to nan
+    df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'POO_LONGITUDE'] = np.nan # set longitude to nan
+    df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LL_CONFIDENCE'] = 'N'
+    
     return df
 
 def _get_str_ext(uid_xref):
@@ -340,7 +356,7 @@ def historical1_merge_prep():
     df = pd.read_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}.csv'.format(lgcy_timespan))
     lu_df = pd.read_csv('../../data/out/IMSR_LOOKUPS.csv')
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-    df = _split_duplicate_incident_ids(df)
+    df = _split_duplicate_incident_numbers(df)
     df = _clean_and_format_date_and_time_fields(df)
     df = _derive_new_fields(df)
     df = _general_field_cleaning(df)
@@ -361,5 +377,3 @@ def historical1_merge_prep():
     
     df_ext.to_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}_cleaned.csv'.format(lgcy_timespan))
     
-    
-	
