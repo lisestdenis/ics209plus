@@ -841,7 +841,7 @@ def _join_with_fod_database2(inc_df):
     
                      
 def create_final_datasets():
-    '''
+    
    
     # read cleaned version
     df_h1 = pd.read_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}_cleaned.csv'.format(lgcy_timespan),low_memory=False)
@@ -883,7 +883,7 @@ def create_final_datasets():
     
     wfdf = _calculate_fire_statistics(wfdf)
     wfdf.to_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan))
-    '''
+    
    
     wfdf = pd.read_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan),low_memory=False)
     
