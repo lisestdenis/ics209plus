@@ -175,7 +175,8 @@ def _general_field_cleaning(df):
     df['ENAME'] = df['ENAME'].str.upper()
     
     # remove non-numeric values from containment values
-    df.F_CONTAIN = df.F_CONTAIN.astype(str).str.replace('\D','')
+    df[['F_CONTAIN']] = df[["F_CONTAIN"]].apply(pd.to_numeric,errors='coerce')
+    df.loc[df.F_CONTAIN > 100, 'F_CONTAIN'] = (df.F_CONTAIN/df.ACRES)
     
     # containment date cleaning
     df.CDATE = df.CDATE.astype(str).str.replace(r'u[nk][nk]*o*w*n*','',case=False)
@@ -206,7 +207,7 @@ def _standardized_fields(df):
     tt = {'1':'Type 1 Team','2':'Type 2 Team','3':'Type 3 Team','4':'Type 3 IC','5':'Type 4 IC','6':'Type 5 IC',
       '7':'Type 1 IC','8':'Type 2 IC','A':'FUM1','B':'FUM2','C':'Area Command','D':'Unified Command','E':'SOPL',
       'F':'FUMT'}
-    df['INC_MGMT_ORG_DESC'] = df['TEAMTYPE'].map(tt)
+    df['IMT_MGMT_ORG_DESC'] = df['TEAMTYPE'].map(tt)
     
     # incident type 
     itidmap = {'EQ':9855,'FL':9856,'HM':9858,'HU':9860,'TO':9867,'WF':9851,'WFU':1,'RX':2,'SAR':9864,'OT':9925}
@@ -255,7 +256,7 @@ def _ks_merge_purge_duplicates(df):
     
 def _latitude_longitude_updates(df):
     leg_loc = pd.read_csv('../../data/raw/latlong_clean/legacy_cleaned_ll-fod.csv')
-    leg_loc = leg_loc.loc[:, ~leg_loc.columns.str.contains('^Unnamed')]
+    leg_loc = leg_loc.loc[:,'FIRE_EVENT_ID':'LL_CONFIDENCE']
     df = df.merge(leg_loc, on=['FIRE_EVENT_ID'],how='left')
     # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
