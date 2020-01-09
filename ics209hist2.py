@@ -213,12 +213,12 @@ def _standardized_fields(df):
     tt = {'1':'Type 1 Team','2':'Type 2 Team','3':'Type 3 Team','4':'Type 3 IC','5':'Type 4 IC','6':'Type 5 IC',
       '7':'Type 1 IC','8':'Type 2 IC','A':'FUM1','B':'FUM2','C':'Area Command','D':'Unified Command','E':'SOPL',
       'F':'FUMT'}
-    df['IMT_TYPE_DESC'] = df['IMT_TYPE'].map(tt)
+    df['IMT_MGMT_ORG_DESC'] = df['IMT_TYPE'].map(tt)
     
     # percent/mma convert to current values
     pm = {'P': 'PCT', 'M': 'MMA'}
-    df['PCT_CONT_COMPL_ABBREV'] = df['PERCENT_MMA'].map(pm)
-    df['PCT_CONT_COMPL_ABBREV'].value_counts()
+    df['PCT_CONT_COMPL_UOM_ABBREV'] = df['PERCENT_MMA'].map(pm)
+    df['PCT_CONT_COMPL_UOM_ABBREV'].value_counts()
     
     # suppression method abbreviation and full description
     ss_abbrev = {'MM':'M','CC':'C','PZ': 'PZP','FS':'FS'}
@@ -285,7 +285,7 @@ def _ks_merge_purge_duplicates(df):
 
 def _latitude_longitude_updates(df):
     hist_loc = pd.read_csv('../../data/raw/latlong_clean/historical_cleaned_ll-fod.csv')
-    hist_loc = hist_loc.loc[:, ~hist_loc.columns.str.contains('^Unnamed')]
+    hist_loc = hist_loc.loc[:, 'FIRE_EVENT_ID':'LL_CONFIDENCE']
     df = df.merge(hist_loc, on=['FIRE_EVENT_ID'],how='left')
     # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
