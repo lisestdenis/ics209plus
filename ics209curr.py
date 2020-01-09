@@ -14,8 +14,8 @@ def _general_field_cleaning(df):
     df['PLANNED_ACTIONS'] = df.PLANNED_ACTIONS.apply(np.vectorize(ics209util.clean_narrative_text))
     df['REMARKS'] = df.REMARKS.apply(np.vectorize(ics209util.clean_narrative_text))
     df['SIGNIF_EVENTS_SUMMARY'] = df.SIGNIF_EVENTS_SUMMARY.apply(np.vectorize(ics209util.clean_narrative_text))
-    df['SRATEGIC_DISCUSSION'] = df.STRATEGIC_DISCUSSION.apply(np.vectorize(ics209util.clean_narrative_text))
-    df['SRATEGIC_OBJECTIVES'] = df.STRATEGIC_OBJECTIVES.apply(np.vectorize(ics209util.clean_narrative_text))
+    df['STRATEGIC_DISCUSSION'] = df.STRATEGIC_DISCUSSION.apply(np.vectorize(ics209util.clean_narrative_text))
+    df['STRATEGIC_OBJECTIVES'] = df.STRATEGIC_OBJECTIVES.apply(np.vectorize(ics209util.clean_narrative_text))
     df['WEATHER_CONCERNS_NARR'] = df.WEATHER_CONCERNS_NARR.apply(np.vectorize(ics209util.clean_narrative_text))
     df['UNIT_OR_OTHER_NARR'] = df.UNIT_OR_OTHER_NARR.apply(np.vectorize(ics209util.clean_narrative_text))
     df['CURRENT_THREAT_12'] = df.CURRENT_THREAT_12.apply(np.vectorize(ics209util.clean_narrative_text))
@@ -35,7 +35,6 @@ def _clean_and_format_date_and_time_fields(df):
     
     df['CY'] = df.REPORT_FROM_DATE.dt.year
     df['START_YEAR'] = df.DISCOVERY_DATE.dt.year
-    df['END_YEAR'] = df.ANTICIPATED_COMPLETION_DATE.dt.year
     df.loc[df.START_YEAR.isnull(), 'START_YEAR'] = df.CY
     
     return df
@@ -123,7 +122,6 @@ def _derive_new_fields(df):
     return df
 
 def _patch_missing_sitrep_fields(df):
-    print("shape Before patch shape: {}".format(df.shape))
     inc_df = pd.read_csv('../../data/out/SIT209_HISTORY_INCIDENTS_{}.csv'.format(curr_timespan))
     
     inc_xref = inc_df[['INCIDENT_IDENTIFIER','INCIDENT_NAME','INCIDENT_NUMBER','CAUSE_IDENTIFIER','DISCOVERY_DATE',\
@@ -148,95 +146,42 @@ def _patch_missing_sitrep_fields(df):
     df['M_INCIDENT_NUMBER'] = df.M_INCIDENT_NUMBER.astype(str).str.strip()
     df['M_CITY'] = df.M_CITY.astype(str).str.strip()
     df['M_LOC_DESC'] = df.M_LOC_DESC.astype(str).str.strip()
-    print("nulls before inc name: {}".format((df.loc[df.INCIDENT_NAME=="nan"].shape[0]/df.shape[0])))
     df.loc[df.INCIDENT_NAME=="nan", 'INCIDENT_NAME'] = df.M_INCIDENT_NAME
-    print("nulls after inc name: {}".format((df.loc[df.INCIDENT_NAME=="nan"].shape[0]/df.shape[0])))
-    print("nulls before inc num: {}".format((df.loc[df.INCIDENT_NUMBER=="nan"].shape[0]/df.shape[0])))
     df.loc[df.INCIDENT_NUMBER=="nan", 'INCIDENT_NUMBER'] = df.M_INCIDENT_NUMBER
-    print("nulls after inc num: {}".format((df.loc[df.INCIDENT_NUMBER=="nan"].shape[0]/df.shape[0])))
-    print("nulls before cause id: {}".format((df.loc[df.CAUSE_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     df.loc[df.CAUSE_IDENTIFIER.isnull(),'CAUSE_IDENTIFIER'] = df.M_CAUSE
-    print("nulls after cause id: {}".format((df.loc[df.CAUSE_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
-    print("nulls before discovery: {}".format((df.loc[df.DISCOVERY_DATE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.DISCOVERY_DATE.isnull(),'DISCOVERY_DATE'] = df.M_DISC
-    print("nulls after discovery: {}".format((df.loc[df.DISCOVERY_DATE.isnull()].shape[0]/df.shape[0])))
-    print("nulls before inc typ: {}".format((df.loc[df.INCTYP_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     df.loc[df.INCTYP_IDENTIFIER.isnull(),'INCTYP_IDENTIFIER'] = df.M_INCTYP
-    print("nulls after inc typ: {}".format((df.loc[df.INCTYP_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     
     # Location variables
-    print("loc desc before: {}".format((df.loc[df.POO_SHORT_LOCATION_DESC=="nan"].shape[0]/df.shape[0])))
     df.loc[df.POO_SHORT_LOCATION_DESC=="nan",'POO_SHORT_LOCATION_DESC'] = df.M_LOC_DESC
-    print("loc desc after: {}".format((df.loc[df.POO_SHORT_LOCATION_DESC=="nan"].shape[0]/df.shape[0])))
-    print("city before: {}".format((df.loc[df.POO_CITY=="nan"].shape[0]/df.shape[0])))
     df.loc[df.POO_CITY=="nan",'POO_CITY'] = df.M_CITY
-    print("city after: {}".format((df.loc[df.POO_CITY=="nan"].shape[0]/df.shape[0])))
-    print("county before: {}".format((df.loc[df.POO_COUNTY_CODE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_COUNTY_CODE.isnull(),'POO_COUNTY_CODE'] = df.M_COUNTY
-    print("county after: {}".format((df.loc[df.POO_COUNTY_CODE.isnull()].shape[0]/df.shape[0])))
-    print("state before: {}".format((df.loc[df.POO_STATE_CODE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_STATE_CODE.isnull(),'POO_STATE_CODE'] = df.M_STATE
-    print("state after: {}".format((df.loc[df.POO_STATE_CODE.isnull()].shape[0]/df.shape[0])))
-    print("donwcgu before: {}".format((df.loc[df.POO_DONWCGU_OWN_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_DONWCGU_OWN_IDENTIFIER.isnull(),'POO_DONWCGU_OWN_IDENTIFIER'] = df.M_DONWCGU
-    print("donwcgu after: {}".format((df.loc[df.POO_DONWCGU_OWN_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
-    print("latitude before: {}".format((df.loc[df.POO_LATITUDE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LATITUDE.isnull(),'POO_LATITUDE'] = df.M_LATITUDE
-    print("latitude after: {}".format((df.loc[df.POO_LATITUDE.isnull()].shape[0]/df.shape[0])))
-    print("longitude before: {}".format((df.loc[df.POO_LONGITUDE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LONGITUDE.isnull(),'POO_LONGITUDE'] = df.M_LONGITUDE
-    print("longitude after: {}".format((df.loc[df.POO_LONGITUDE.isnull()].shape[0]/df.shape[0])))
-    print("ld pm before: {}".format((df.loc[df.POO_LD_PM_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LD_PM_IDENTIFIER.isnull(),'POO_LD_PM_IDENTIFIER'] = df.M_LD_PM
-    print("ld pm after: {}".format((df.loc[df.POO_LD_PM_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
-    print("qtr qtr sec before: {}".format((df.loc[df.POO_LD_QTR_QTR_SEC.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LD_QTR_QTR_SEC.isnull(),'POO_LD_QTR_QTR_SEC'] = df.M_LD_QTR_QTR_SEC
-    print("qtr qtr sec after: {}".format((df.loc[df.POO_LD_QTR_QTR_SEC.isnull()].shape[0]/df.shape[0])))
-    print("qtr sec before: {}".format((df.loc[df.POO_LD_QTR_SEC.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LD_QTR_SEC.isnull(),'POO_LD_QTR_SEC'] = df.M_LD_QTR_SEC
-    print("qtr sec after: {}".format((df.loc[df.POO_LD_QTR_SEC.isnull()].shape[0]/df.shape[0])))
-    print("rge before: {}".format((df.loc[df.POO_LD_RGE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LD_RGE.isnull(),'POO_LD_RGE'] = df.M_LD_RGE
-    print("rge after: {}".format((df.loc[df.POO_LD_RGE.isnull()].shape[0]/df.shape[0])))
-    print("sec before: {}".format((df.loc[df.POO_LD_SEC.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LD_SEC.isnull(),'POO_LD_SEC'] = df.M_LD_SEC
-    print("sec after: {}".format((df.loc[df.POO_LD_SEC.isnull()].shape[0]/df.shape[0])))
-    print("twp before: {}".format((df.loc[df.POO_LD_TWP.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_LD_TWP.isnull(),'POO_LD_TWP'] = df.M_LD_TWP
-    print("twp after: {}".format((df.loc[df.POO_LD_TWP.isnull()].shape[0]/df.shape[0])))
-    print("xcoord before: {}".format((df.loc[df.POO_US_NGR_XCOORD.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_US_NGR_XCOORD.isnull(),'POO_US_NGR_XCOORD'] = df.M_XCOORD
-    print("xcoord after: {}".format((df.loc[df.POO_US_NGR_XCOORD.isnull()].shape[0]/df.shape[0])))
-    print("ycoord before: {}".format((df.loc[df.POO_US_NGR_YCOORD.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_US_NGR_YCOORD.isnull(),'POO_US_NGR_YCOORD'] = df.M_YCOORD
-    print("ycoord after: {}".format((df.loc[df.POO_US_NGR_YCOORD.isnull()].shape[0]/df.shape[0])))
-    print("ngr zone before: {}".format((df.loc[df.POO_US_NGR_ZONE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_US_NGR_ZONE.isnull(),'POO_US_NGR_ZONE'] = df.M_NGR_ZONE
-    print("ngr zone after: {}".format((df.loc[df.POO_US_NGR_ZONE.isnull()].shape[0]/df.shape[0])))
-    print("utm easting before: {}".format((df.loc[df.POO_UTM_EASTING.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_UTM_EASTING.isnull(),'POO_UTM_EASTING'] = df.M_EASTING
-    print("utm easting after: {}".format((df.loc[df.POO_UTM_EASTING.isnull()].shape[0]/df.shape[0])))
-    print("utm northing before: {}".format((df.loc[df.POO_UTM_NORTHING.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_UTM_NORTHING.isnull(),'POO_UTM_NORTHING'] = df.M_NORTHING
-    print("utm northing after: {}".format((df.loc[df.POO_UTM_NORTHING.isnull()].shape[0]/df.shape[0])))
-    print("utm zone before: {}".format((df.loc[df.POO_UTM_ZONE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_UTM_ZONE.isnull(),'POO_UTM_ZONE'] = df.M_UTM_ZONE
-    print("utm zone after: {}".format((df.loc[df.POO_UTM_ZONE.isnull()].shape[0]/df.shape[0])))
-    print("single cpx flag: {}".format((df.loc[df.SINGLE_COMPLEX_FLAG.isnull()].shape[0]/df.shape[0])))
     df.loc[df.SINGLE_COMPLEX_FLAG.isnull(),'SINGLE_COMPLEX_FLAG'] = df.M_CPX_FLAG
-    print("single cpx after: {}".format((df.loc[df.SINGLE_COMPLEX_FLAG.isnull()].shape[0]/df.shape[0])))
     
     df.drop(['M_INCIDENT_NAME','M_INCIDENT_NUMBER','M_CAUSE','M_DISC','M_INCTYP','M_CITY','M_COUNTY',\
             'M_DONWCGU','M_LATITUDE','M_LONGITUDE','M_LD_PM','M_LD_QTR_QTR_SEC','M_LD_QTR_SEC','M_LD_RGE',\
             'M_LD_SEC','M_LD_TWP','M_LOC_DESC','M_STATE','M_XCOORD','M_YCOORD','M_NGR_ZONE','M_EASTING',\
             'M_NORTHING','M_UTM_ZONE','M_CPX_FLAG'],axis=1,inplace=True)
-    print("shape After patch {}".format(df.shape))
-
     return df
     
 def _create_incident_id(df):
     # forward fill added to fix sparcity issue 2015/2016 data when creating incident ID
-    print("Creating incident ID")
     df = df.sort_values(['INC_IDENTIFIER','REPORT_TO_DATE']).copy()
     df = df.reset_index(drop=True)
     
@@ -259,7 +204,7 @@ def _create_incident_id(df):
 
 def _latitude_longitude_updates(df):
     curr_loc = pd.read_csv('../../data/raw/latlong_clean/2014_cleaned_ll-fod.csv')
-    curr_loc = curr_loc.loc[:, ~curr_loc.columns.str.contains('^Unnamed')]
+    curr_loc = curr_loc.loc[:, 'INC_IDENTIFIER':'LL_CONFIDENCE']
     df = df.merge(curr_loc, on=['INC_IDENTIFIER'],how='left')
     # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
