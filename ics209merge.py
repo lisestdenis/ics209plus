@@ -44,12 +44,11 @@ def _historical2_rename_columns(df_h2):
     df_h2.columns = df_h2.columns.str.replace('COUNTY','POO_COUNTY')
     df_h2.columns = df_h2.columns.str.replace('START_DATE','DISCOVERY_DATE') # order matters, must preceed next row
     df_h2.columns = df_h2.columns.str.replace('DEMOBE_START','PROJ_SIG_RES_DEMOB_START_DATE')
-    df_h2.columns = df_h2.columns.str.replace('EST_FINAL_AREA_NUM','PROJ_INCIDENT_AREA')
+    df_h2.columns = df_h2.columns.str.replace('EST_FINAL_AREA','PROJ_INCIDENT_AREA')
     df_h2.columns = df_h2.columns.str.replace('EST_FINAL_COSTS','PROJECTED_FINAL_IM_COST')
     df_h2.columns = df_h2.columns.str.replace('EXP_CONTAIN','EXPECTED_CONTAINMENT_DATE')
     df_h2.columns = df_h2.columns.str.replace('FUELS','HAZARDS_MATLS_INVOLVMENT_NARR')
     df_h2.columns = df_h2.columns.str.replace('IC_NAME','INCIDENT_COMMANDERS_NARR')
-    df_h2.columns = df_h2.columns.str.replace('IMT_TYPE_DESC','INC_MGMT_ORG_DESC')
     df_h2.columns = df_h2.columns.str.replace('IMT_TYPE','INC_MGMT_ORG_ABBREV')
     df_h2.columns = df_h2.columns.str.replace('LATITUDE','POO_LATITUDE')
     df_h2.columns = df_h2.columns.str.replace('LONGITUDE','POO_LONGITUDE')
@@ -81,13 +80,18 @@ def _final_alignments(df):
     
     # date formatting and DOY variables
     df['DISCOVERY_DATE'] = pd.to_datetime(df.DISCOVERY_DATE, errors='coerce')
-    df['DISCOVERY_DOY'] = df.DISCOVERY_DATE.dt.dayofyear
     df['REPORT_TO_DATE'] = pd.to_datetime(df.REPORT_TO_DATE, errors='coerce')
     df['REPORT_DOY'] = df.REPORT_TO_DATE.dt.dayofyear
     df['DISCOVERY_DATE_CORRECTED'] = pd.to_datetime(df.DISCOVERY_DATE_CORRECTED, errors='coerce')
+    df.loc[df.DISCOVERY_DATE.isnull(),'DISCOVERY_DATE'] = df.REPORT_TO_DATE
+    df['DISCOVERY_DOY'] = df.DISCOVERY_DATE.dt.dayofyear
+    df['EXPECTED_CONTAINMENT_DATE'] = pd.to_datetime(df.EXPECTED_CONTAINMENT_DATE, errors='coerce')
+    df['PROJ_SIG_RES_DEMOB_START_DATE'] = pd.to_datetime(df.PROJ_SIG_RES_DEMOB_START_DATE, errors='coerce')
      
     df.loc[(df.DISCOVERY_DATE_CORRECTED.notnull()) & (df.INCTYP_ABBREVIATION.isin(['WF','WFU'])) & \
            (df.DISCOVERY_DATE != df.DISCOVERY_DATE_CORRECTED),'DISCOVERY_DATE'] = df.DISCOVERY_DATE_CORRECTED
+    
+    df[['GACC_PRIORITY']] = df[["GACC_PRIORITY"]].apply(pd.to_numeric,errors='coerce')
     
     return df
 
@@ -102,23 +106,24 @@ def _drop_extra_columns(df):
                  'CURRENT_THREAT_GT72','CURR_INC_AREA_UOM_IDENTIFIER','DATA_ENTRY_STATUS',\
                  'DONWCGU_PROT_UNIT_IDENTIFIER','DOU_IDENTIFIER','EST_CONTROL','FUEL_MODEL_IDENTIFIER',\
                  'GACC_OBS_FIRE_BEHAVE','GACC_PLANNED_ACTIONS','GACC_REMARKS','GACC_SIGNIF_EVENTS_SUMMARY',\
-                 'HOUR','INC_MGMT_ORG_IDENTIFIER','INC_MGMT_ORG_ABBREV','ITYPE','LAST_MODIFIED_BY',\
-                 'LAST_MODIFIED_DATE','LATDEG','LATMIN','LONGDEG','LONGMIN','LINE_MEASUREMENT',\
+                 'HOUR','INC_MGMT_ORG_IDENTIFIER','ITYPE','LAST_MODIFIED_BY',\
+                 'LAST_MODIFIED_DATE','LAST_EDIT','LATDEG','LATMIN','LONGDEG','LONGMIN','LINE_MEASUREMENT',\
                  'LINE_TO_BUILD','LINE_TO_BUILD_NUM','LOCAL_TIMEZONE_IDENTIFIER','MANAGEMENT_CODE',\
                  'NEWACRES','NO_EVACUATION','NO_LIKELY','OWNERSHIP_STATE','OWNERSHIP_STATE','OWNERSHIP_UNITID',\
-                 'PCT_CONT_COMPL_UOM_IDENTIFIER','PCT_CONT_COMPL_ABBREV','PERCENT_MMA',\
-                 'POO_COUNTY_CODE','POO_DONWCGU_OWN_IDENTIFIER','POO_LD_PM_IDENTIFIER',\
+                 'PCT_CONT_COMPL_UOM_IDENTIFIER','PERCENT_MMA','POO_COUNTY_CODE',\
+                 'POO_DONWCGU_OWN_IDENTIFIER','POO_LD_PM_IDENTIFIER',\
                  'POO_LD_QTR_QTR_QTR_QTR_SEC','POO_LD_QTR_QTR_QTR_SEC','INCTYP_IDENTIFIER',\
                  'POO_STATE_CODE','POO_US_NGR_XCOORD','POO_US_NGR_YCOORD','POO_US_NGR_ZONE',\
                  'POO_UTM_EASTING','POO_UTM_NORTHING','POO_UTM_ZONE','PREPARED_BY','PREPARED_DATE',\
                  'PRIMARY_FUEL_MODEL','PROJECTED_ACTIVITY_12','PROJECTED_ACTIVITY_24','PROJECTED_ACTIVITY_48',\
                  'PROJECTED_ACTIVITY_72','PROJECTED_ACTIVITY_GT72','PROJECTED_MOVEMENT','PROJECTED_MOVEMENT24',\
                  'PROJECTED_MOVEMENT48','PROJECTED_MOVEMENT72','PROJ_INC_AREA_UOM_IDENTIFIER','REPORT_DATE',\
-                 'REPORT_NUMBER','RES_THREAT','SENT_FROM','SEQ_NUM','SINGLE_COMPLEX_FLAG','STRATEGIC_DISCUSSION',\
+                 'REPORT_NUMBER','RES_THREAT','SENT_FROM','SENT_DATE','SENT_TO','SEQ_NUM','SINGLE_COMPLEX_FLAG',\
+                 'STRATEGIC_DISCUSSION',\
                  'STRATEGIC_OBJECTIVES','SUBMITTED_DATE','SUBMITTED_TO','C_RH','C_TEMP','C_WIND_SPEED',\
                  'C_WIND_DIRECTION','F_RH','F_TEMP','F_WIND_SPEED','F_WIND_DIRECTION',\
                  'WFIP_STAGE','lat_c','long_c','TYPE_INC','DISCOVERY_DATE_CORRECTED', 'FIRE_INCIDENT_NUMBER',\
-                  'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED'
+                 'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED'
                  ],axis=1)
  
     return df
@@ -137,10 +142,8 @@ def _general_field_cleaning(df):
 
 def _event_smoothing_prep(df):
     df['EVENT_ID'] = df['FIRE_EVENT_ID']
-    print(df.EVENT_ID.isnull().sum())
     df.loc[df.EVENT_ID.isnull(),'EVENT_ID'] =  df.INCIDENT_NUMBER.astype(str).str.strip() + "|" + \
                                                df.START_YEAR.astype(str) + "|1"
-    print(df.EVENT_ID.isnull().sum())
     df = df.sort_values(['EVENT_ID','REPORT_TO_DATE'])
     df = df.reset_index(drop=True)
     
@@ -385,7 +388,23 @@ def _event_forward_fill(df):
     df.ACRES.fillna(0,inplace=True)  
     return df
 
+def _report_day_span(date1,date2):
+    
+    date1 = pd.to_datetime(date1)
+    date2 = pd.to_datetime(date2)
+    doy1 = date1.dayofyear
+    doy2 = date2.dayofyear
+    if (date2 < date1) | (doy1 == doy2): #discovery date after report date or doy2 == doy1
+        return 1
+    elif (date1.year == date2.year):
+        return (date2.dayofyear - date1.dayofyear)
+    else:
+        end_str = str(date1.year) + "-12-31"
+        endofyear = pd.Period(end_str,freq='D')
+        return ((endofyear.dayofyear-date1.dayofyear)+date2.dayofyear) 
+
 def _event_smoothing_pass(df):
+    df.to_csv('../../data/tmp/before_event_smooth.csv')
     rows = df.shape[0]
     df['NEW_ACRES'] = 0.0
     df['REPORT_DAY_SPAN'] = 0
@@ -412,14 +431,15 @@ def _event_smoothing_pass(df):
                 df['ACRES'].iloc[i-1] = df.iloc[i].ACRES # adjust acres down
             if np.isfinite(df.iloc[i].ACRES) & np.isfinite(df.iloc[i-1].ACRES):
                 df['NEW_ACRES'].iloc[i] = df.iloc[i].ACRES - df.iloc[i-1].ACRES
-                df['REPORT_DAY_SPAN'].iloc[i] = df.iloc[i].REPORT_DOY - df.iloc[i-1].REPORT_DOY
-        else: # at the boundary of even
+                df['REPORT_DAY_SPAN'].iloc[i] = _report_day_span(df.iloc[i-1].REPORT_TO_DATE,df.iloc[i].REPORT_TO_DATE)
+                                                            
+        else: # at the boundary of event
             df['NEW_ACRES'].iloc[i] = df.iloc[i].ACRES
-            df['REPORT_DAY_SPAN'].iloc[i] = df.iloc[i].REPORT_DOY - df.iloc[i].DISCOVERY_DOY 
+            df['REPORT_DAY_SPAN'].iloc[i] = _report_day_span(df.iloc[i].DISCOVERY_DATE,df.iloc[i].REPORT_TO_DATE)
+                                                             
     # set values for row 0
     df['NEW_ACRES'].iloc[0] = df.iloc[0].ACRES
-    df['REPORT_DAY_SPAN'].iloc[0] = df.iloc[0].REPORT_DOY - df.iloc[0].DISCOVERY_DOY
-    
+    df['REPORT_DAY_SPAN'].iloc[0] = _report_day_span(df.iloc[0].DISCOVERY_DATE,df.iloc[0].REPORT_TO_DATE)
     
     # forward smoothing
     print("Forward smoothing pass...")
@@ -481,7 +501,7 @@ def _calculate_fire_statistics(df):
     e_grp_final = df.sort_values(['INCIDENT_ID','FIRE_EVENT_ID',\
                                     'REPORT_TO_DATE']).groupby(['INCIDENT_ID','FIRE_EVENT_ID']).nth(-1)
     e_grp_final = e_grp_final.reset_index()
-    e_grp_final = e_grp_final.drop(e_grp_final[(e_grp_final.EVENT_ID == "2014.0|WA-WFS-513|1")].index)
+    e_grp_final = e_grp_final.drop(e_grp_final[(e_grp_final.EVENT_ID == "2014|WA-WFS-513|1")].index)
     e_grp_final = e_grp_final[['INCIDENT_ID','FIRE_EVENT_ID','ACRES']].copy()
     e_grp_final.columns = ['INCIDENT_ID','FIRE_EVENT_ID','EVENT_FINAL_ACRES']
 
@@ -498,11 +518,16 @@ def _calculate_fire_statistics(df):
     df.loc[df.ACRES.notnull() & df.FIRE_MAX_ACRES.notnull(),'MAX_FIRE_PCT_FINAL_SIZE'] = df.ACRES/df.FIRE_MAX_ACRES
     df = df.drop(['EVENT_PCT_FINAL_SIZE'],axis=1)
     df = df.drop(['FIRE_MAX_ACRES'],axis=1)
+    df = df.drop(['EVENT_FINAL_ACRES'],axis=1)
+    df = df.drop(['EVENT_ID'],axis=1)
         
     return df
 
 def _create_incident_summary(wfdf):
     wfinc_1st = wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby(['INCIDENT_ID']).first()
+    wfinc_1st = wfinc_1st.reset_index()
+    wfinc_1st = wfinc_1st[['INCIDENT_ID','REPORT_TO_DATE']]
+    wfinc_1st.columns = ['INCIDENT_ID','INITIAL_REPORT_DATE']
                                                                             
     wfinc_df = wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby('INCIDENT_ID').nth(-1)
     wfinc_df = wfinc_df.reset_index()
@@ -515,6 +540,9 @@ def _create_incident_summary(wfdf):
                     'POO_LONGITUDE','POO_SHORT_LOCATION_DESC','POO_STATE','PROJECTED_FINAL_IM_COST','START_YEAR',\
                     'SUPPRESSION_METHOD','STR_DAMAGED','STR_DAMAGED_COMM','STR_DAMAGED_RES','STR_DESTROYED',\
                     'STR_DESTROYED_COMM','STR_DESTROYED_RES','REPORT_TO_DATE']].copy()
+    
+    wfincdf = pd.merge(wfincdf,wfinc_1st,on=['INCIDENT_ID'],how='left')
+    wfincdf['INITIAL_REPORT_DATE'] = pd.to_datetime(wfincdf.INITIAL_REPORT_DATE)
     
     # rename columns
     wfincdf.columns = wfincdf.columns.str.replace('ACRES','FINAL_ACRES')
@@ -599,7 +627,24 @@ def _create_incident_summary(wfdf):
     wfincdf = pd.merge(wfincdf,maxgrowth,on=['INCIDENT_ID'],how='left')
     wfincdf['WF_MAX_GROWTH_DATE'] = pd.to_datetime(wfincdf.WF_MAX_GROWTH_DATE)
     wfincdf['WF_MAX_GROWTH_DOY'] = wfincdf.WF_MAX_GROWTH_DATE.dt.dayofyear
-    wfincdf['WF_GROWTH_DURATION'] = wfincdf.WF_CESSATION_DOY - wfincdf.DISCOVERY_DOY
+    # growth duration accounting for fires that span annual boundary
+    wfincdf['DISCOVERY_DATE'] = pd.to_datetime(wfincdf.DISCOVERY_DATE)
+    wfincdf['DISCOVERY_DOY'] = wfincdf.DISCOVERY_DATE.dt.dayofyear
+    # account for overlap annual boundary and errors in discovery date
+    wfincdf.loc[((wfincdf.DISCOVERY_DATE < wfincdf.WF_CESSATION_DATE) & \
+                 (wfincdf.DISCOVERY_DATE.dt.year == wfincdf.WF_CESSATION_DATE.dt.year)),\
+                'WF_GROWTH_DURATION'] = wfincdf.WF_CESSATION_DOY - wfincdf.DISCOVERY_DOY
+    wfincdf.loc[((wfincdf.DISCOVERY_DATE > wfincdf.WF_CESSATION_DATE) & \
+                 (wfincdf.DISCOVERY_DATE.dt.year == wfincdf.WF_CESSATION_DATE.dt.year)),\
+                'WF_GROWTH_DURATION'] = wfincdf.WF_CESSATION_DOY - wfincdf.INITIAL_REPORT_DATE.dt.dayofyear
+    wfincdf.loc[((wfincdf.DISCOVERY_DATE < wfincdf.WF_CESSATION_DATE) &\
+                 (wfincdf.DISCOVERY_DATE.dt.year != wfincdf.WF_CESSATION_DATE.dt.year)), 
+                'WF_GROWTH_DURATION'] = (365 - wfincdf.DISCOVERY_DOY) + wfincdf.WF_CESSATION_DOY
+    wfincdf.loc[((wfincdf.DISCOVERY_DATE > wfincdf.WF_CESSATION_DATE) &\
+                 (wfincdf.DISCOVERY_DATE.dt.year != wfincdf.WF_CESSATION_DATE.dt.year)), 
+                'WF_GROWTH_DURATION'] = (365 - wfincdf.DISCOVERY_DOY) + wfincdf.INITIAL_REPORT_DATE.dt.dayofyear
+    
+    wfincdf = wfincdf.drop(['INITIAL_REPORT_DATE'],axis=1)
     
     return wfincdf
 
@@ -700,7 +745,6 @@ def _join_with_fod_database(inc_df):
     mfod_df['LRGST_MTBS_FIRE_NAME'] = mfod_df.TMP_MTBS_ID.str.extract(r'(\([\w\s\d#\-\.\'\&]*\(?[\w\s\d#-]*\)+)')
     mfod_df['LRGST_LATITUDE'] = mfod_df['LRGST_COORDS'][0][0]
     mfod_df['LRGST_LONGITUDE'] = mfod_df['LRGST_COORDS'][0][1]
-    #mfod_df = mfod_df.drop(['TMP_CAUSE','LRGST_CONT','LRGST_COORDS','LRGST_DISC','TMP_MTBS_ID','LRGST_SIZE'])
     mfod_df.to_csv('../../data/tmp/mfod_df.csv')
 
     inc_df = pd.merge(inc_df,mfod_df,on='INCIDENT_ID',how='left')
@@ -812,7 +856,6 @@ def _join_with_fod_database2(inc_df):
     mfod_df['LRGST_MTBS_FIRE_NAME'] = mfod_df.TMP_MTBS_ID.str.extract(r'(\([\w\s\d#\-\.\'\&]*\(?[\w\s\d#-]*\)+)')
     mfod_df['LRGST_LATITUDE'] = mfod_df['LRGST_COORDS'][0][0]
     mfod_df['LRGST_LONGITUDE'] = mfod_df['LRGST_COORDS'][0][1]
-    #mfod_df = mfod_df.drop(['TMP_CAUSE','LRGST_CONT','LRGST_COORDS','LRGST_DISC','TMP_MTBS_ID','LRGST_SIZE'])
 
     inc_df = pd.merge(inc_df,mfod_df,on='INCIDENT_ID',how='left')
 
@@ -842,7 +885,6 @@ def _join_with_fod_database2(inc_df):
                      
 def create_final_datasets():
     
-   
     # read cleaned version
     df_h1 = pd.read_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}_cleaned.csv'.format(lgcy_timespan),low_memory=False)
     df_h1 = df_h1.loc[:, ~df_h1.columns.str.contains('^Unnamed')]
@@ -854,21 +896,21 @@ def create_final_datasets():
     
     # rename columns so that matching columns align
     df_h1 = _historical1_rename_columns(df_h1)
+    df_h1.to_csv('../../data/tmp/h1_rename.csv')
     df_h2 = _historical2_rename_columns(df_h2)
+    df_h2.to_csv('../../data/tmp/h2_rename.csv')
+    df_curr.to_csv('../../data/tmp/curr_cols.csv')
     
     # concatenate all three datasets
     df = pd.concat([df_h1,df_h2,df_curr],sort=True)
-    
     df = _final_alignments(df)
-    
     df = _drop_extra_columns(df)
     
+ 
     # event level smoothing
     df = _event_smoothing_prep(df)
     df = _cost_adjustments(df)
-   
     df = _event_forward_fill(df)
-    df.to_csv('../../data/tmp/after_ff.csv')
     
     df = _event_smoothing_pass(df)
    
@@ -884,11 +926,14 @@ def create_final_datasets():
     wfdf = _calculate_fire_statistics(wfdf)
     wfdf.to_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan))
     
-   
-    wfdf = pd.read_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan),low_memory=False)
     
+    #wfdf = pd.read_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan),low_memory=False)
+   
     # create the incident level summary
     inc_df = _create_incident_summary(wfdf)
+    
     inc_df = _join_with_fod_database(inc_df)
     inc_df.to_csv('../../data/out/ics209-plus-wf_incidents_{}.csv'.format(final_timespan))
+    
+   
 
