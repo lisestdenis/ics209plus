@@ -1,11 +1,13 @@
+import os
 import pandas as pd
 import numpy as np
 import ics209util
+import earthpy as et
 
 lgcy_timespan = '1999to2002'
 hist_timespan = '2001to2013'
-curr_timespan = '2014' # truncated until FAMWEB issues are fixed
-current_year = 2015
+curr_timespan = '2014to2020' 
+current_year = 2021
 
 lgcy_sitrep_data = []
 lgcy_resource_data = []
@@ -24,8 +26,12 @@ curr_cslty_data = []
 curr_life_safety_data = []
 curr_strategy_data = []
 curr_lookup_data = []
+
+data_dir = os.path.join(et.io.HOME, 'data')
+excel = ".xlsx"
+csv = ".csv"
     
-def get_annual_famweb_datafile(year, file_suffix):
+def get_annual_famweb_datafile(year, file_xtend):
     """Retrieve file from annual directory and convert to dataframe
     
     Args:
@@ -34,33 +40,34 @@ def get_annual_famweb_datafile(year, file_suffix):
     
     Returns: pandas dataframe
     """
-    legacy_suffixes = ['INFORMATIONS','RESOURCES','STRUCTURES']
+    ftype = ".xlsx"
+    legacy_xtensions = ['INFORMATIONS','RESOURCES','STRUCTURES']
     # Setup the appropriate file prefix based on current system or historical
     if year < 2001 :
-        xlPath = "../../data/raw/excel/{}/IMSR_INCIDENT_{}.xlsx".format(year,file_suffix)
+        file_name = "IMSR_INCIDENT_" + file_xtend + ftype
     elif year < 2014 :
-        if ((year == 2001) or (year == 2002)) and (file_suffix in legacy_suffixes) :
-            xlPath = "../../data/raw/excel/{}/IMSR_INCIDENT_{}.xlsx".format(year,file_suffix)
+        if ((year == 2001) or (year == 2002)) and (file_xtend in legacy_xtensions) :
+            file_name = "IMSR_INCIDENT_" + file_xtend + ftype
         else:
-            xlPath = "../../data/raw/excel/{}/IMSR_IMSR_209_INCIDENT{}.xlsx".format(year,file_suffix)
-    else :
-        xlPath = "../../data/raw/excel/{}/SIT209_HISTORY_INCIDENT{}.xlsx".format(year,file_suffix)
+            file_name = "IMSR_IMSR_209_INCIDENT" + file_xtend + ftype
+    else: 
+        file_name = "SIT209_HISTORY_INCIDENT" + file_xtend + ftype
+    file_path = os.path.join(data_dir,'raw','excel',str(year),file_name) 
     
-    # get the excel file and convert to df
-    xl = pd.ExcelFile(xlPath)
-    df = xl.parse(0)
-    # if this is setrep, remove \n & \r chars to prevent problems
-    if file_suffix == 'INFORMATIONS' :
+    if ftype == excel:
+        xl = pd.ExcelFile(file_path)
+        df = xl.parse(0)
+    else:
+        df = pd.read_csv(file_path)
+    if file_xtend == 'INFORMATIONS' :
         legacyFlag = True
     else:
         legacyFlag = False
-    if ics209util.is_sitrep(year,file_suffix):
+    if ics209util.is_sitrep(year,file_xtend):
         df = ics209util.remove_problematic_chars(year,df,legacyFlag)
-        if year == 2015:
-            df = ics209util.reformatMSTimestamp(df,file_suffix)
-        elif year == 2016:
-            df = ics209util.reformatTimestamp(df,file_suffix)
+    
     return(df)
+        
 
 def get_annual_lookup_file(year):
     """ Get annual lookup file and return convert to dataframe
@@ -70,15 +77,23 @@ def get_annual_lookup_file(year):
     Returns: 
         dataframe
     """
+    ftype = ".xlsx"
     if year < 2014:
-        xlPath = "../../data/raw/excel/{}/IMSR_LOOKUPS.xlsx".format(year)
+        file_name = "IMSR_LOOKUPS" + ftype
     else :
         if year == 2016 :
-            xlPath = "../../data/raw/excel/{}/SIT209_LOOKUP_CODES.xlsx".format(year)
+            file_name = "SIT209_LOOKUP_CODES" + ftype
         else:
-            xlPath = "../../data/raw/excel/{}/SIT209_HISTORY_SIT209_LOOKUP_CODES.xlsx".format(year)
-    xl = pd.ExcelFile(xlPath)
-    return(xl.parse(0))
+            file_name = "SIT209_HISTORY_SIT209_LOOKUP_CODES" + ftype
+    file_path = os.path.join(data_dir, 'raw', 'excel', str(year), file_name)
+    
+    if ftype == excel:
+        xl = pd.ExcelFile(file_path)
+        df = xl.parse(0)
+    else:
+        df = pd.read_csv(file_path)
+    
+    return(df)
 
 def concatenate_annual_files():
     """ concatenate_annual_files: processes each year of ics209 data and consolidates excel files into single dataframes
@@ -87,8 +102,13 @@ def concatenate_annual_files():
     """
 
     # loop from start of hist1 through current year
+    
     for year in range(1999,current_year): #Will retrieve up to current year -1
         print("Getting data for {}...".format(year))
+        if year < 2019 :
+            ftype = '.xlsx'
+        else:
+            ftype = '.csv'
         if year < 2001 :
             lgcy_sitrep_data.append(get_annual_famweb_datafile(year,'INFORMATIONS'))
             lgcy_resource_data.append(get_annual_famweb_datafile(year,'RESOURCES'))
@@ -119,39 +139,51 @@ def concatenate_annual_files():
             curr_lookup_data.append(get_annual_lookup_file(year))
             
     # concatenate individual files and save to csv
-    pd.concat(lgcy_sitrep_data).to_csv("../../data/out/IMSR_INCIDENT_INFORMATIONS_{}.csv".format(lgcy_timespan))
-    pd.concat(lgcy_resource_data,sort=True).to_csv("../../data/out/IMSR_INCIDENT_RESOURCES_{}.csv".format(lgcy_timespan))
-    pd.concat(lgcy_structure_data).to_csv("../../data/out/IMSR_INCIDENT_STRUCTURES_{}.csv".format(lgcy_timespan))
-    pd.concat(hist_sitrep_data,sort=True).to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}.csv'.format(hist_timespan))
-    pd.concat(hist_resource_data,sort=True).to_csv('../../data/out/IMSR_IMSR_209_INCIDENT_RESOURCES_{}.csv'\
-                                                   .format(hist_timespan))
-    pd.concat(hist_structure_data,sort=True).to_csv('../../data/out/IMSR_IMSR_209_INCIDENT_STRUCTURES_{}.csv'\
-                                                    .format(hist_timespan))
-    pd.concat(hist_complex_data).to_csv('../../data/out/IMSR_IMSR_209_COMPLEX_{}.csv'.format(hist_timespan))
-    pd.concat(hist_lookup_data).to_csv('../../data/out/IMSR_LOOKUPS.csv')
-    pd.concat(curr_incident_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENTS_{}.csv'.format(curr_timespan))
-    curr_sitrep_df = pd.concat(curr_sitrep_data)
+    out_dir = os.path.join(data_dir,'out')
+    
+    pd.concat(lgcy_sitrep_data,sort=True).to_csv(os.path.join(out_dir,
+                                                              "IMSR_INCIDENT_INFORMATIONS_{}.csv".format(lgcy_timespan)))
+    pd.concat(lgcy_resource_data,sort=True).to_csv(os.path.join(out_dir,
+                                                                "IMSR_INCIDENT_RESOURCES_{}.csv".format(lgcy_timespan)))
+    pd.concat(lgcy_structure_data,sort=True).to_csv(os.path.join(out_dir,     
+                                                                 "IMSR_INCIDENT_STRUCTURES_{}.csv".format(lgcy_timespan)))
+    pd.concat(hist_sitrep_data,sort=True).to_csv(os.path.join(out_dir,
+                                                              "IMSR_IMSR_209_INCIDENTS_{}.csv".format(hist_timespan)))
+    pd.concat(hist_resource_data,sort=True).to_csv(os.path.join(out_dir,
+                                                                "IMSR_IMSR_209_INCIDENT_RESOURCES_{}.csv".format(hist_timespan)))
+    pd.concat(hist_structure_data,sort=True).to_csv(os.path.join(out_dir,
+                                                               "IMSR_IMSR_209_INCIDENT_STRUCTURES_{}.csv".format(hist_timespan)))
+    pd.concat(hist_complex_data,sort=True).to_csv(os.path.join(out_dir,
+                                                               "IMSR_IMSR_209_COMPLEX_{}.csv".format(hist_timespan)))
+    pd.concat(hist_lookup_data,sort=True).to_csv(os.path.join(out_dir,
+                                                              "IMSR_LOOKUPS.csv"))
+    pd.concat(curr_incident_data,sort=True).to_csv(os.path.join(out_dir,
+                                                               "SIT209_HISTORY_INCIDENTS_{}.csv".format(curr_timespan)))
+    curr_sitrep_df = pd.concat(curr_sitrep_data,sort=True)
     curr_sitrep_df = curr_sitrep_df.drop(['ADDTNL_COOP_ASSIST_ORG_NARR','ELEC_GEOSP_DATA_INCL',\
                                           'DAMAGE_ASSESSMENT_INFO'],axis=1)
-    curr_sitrep_df.to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_REPORTS_{}.csv'.format(curr_timespan),\
-                          date_format="%Y-%m-%d %H:%M:%S")
-    #pd.concat(curr_sitrep_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_REPORTS_{}.csv'.format(curr_timespan))
-    pd.concat(curr_resource_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_RES_UTILIZATIONS_{}.csv'\
-                                         .format( curr_timespan))
-    pd.concat(curr_structure_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_AFFECTED_STRUCTS_{}.csv'\
-                                          .format(curr_timespan))
-    pd.concat(curr_cslty_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_CSLTY_ILLNESSES_{}.csv'.format(curr_timespan))
-    pd.concat(curr_life_safety_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_LIFE_SAFETY_MGMTS_{}.csv'\
-                                            .format(curr_timespan))
-    pd.concat(curr_strategy_data).to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_STRATEGIES_{}.csv'.format(curr_timespan))
-    pd.concat(curr_lookup_data).to_csv('../../data/out/SIT209_LOOKUP_CODES.csv')
+    curr_sitrep_df.to_csv(os.path.join(out_dir,
+                                       "SIT209_HISTORY_INCIDENT_209_REPORTS_{}.csv".format(curr_timespan)))
+    
+    pd.concat(curr_resource_data,sort=True).to_csv(os.path.join(out_dir,  
+                                                    "SIT209_HISTORY_INCIDENT_209_RES_UTILIZATIONS_{}.csv".format(curr_timespan)))
+    pd.concat(curr_structure_data,sort=True).to_csv(os.path.join(out_dir,
+                                            "SIT209_HISTORY_INCIDENT_209_AFFECTED_STRUCTS_{}.csv".format(curr_timespan)))
+    pd.concat(curr_cslty_data,sort=True).to_csv(os.path.join(out_dir,
+                                                    "SIT209_HISTORY_INCIDENT_209_CSLTY_ILLNESSES_{}.csv".format(curr_timespan)))
+    pd.concat(curr_life_safety_data,sort=True).to_csv(os.path.join(out_dir,
+                                                    "SIT209_HISTORY_INCIDENT_209_LIFE_SAFETY_MGMTS_{}.csv".format(curr_timespan)))
+    pd.concat(curr_strategy_data,sort=True).to_csv(os.path.join(out_dir,
+                                                        "SIT209_HISTORY_INCIDENT_209_STRATEGIES_{}.csv".format(curr_timespan)))
+    pd.concat(curr_lookup_data,sort=True).to_csv(os.path.join(out_dir,
+                                                              "SIT209_LOOKUP_CODES.csv"))
     # Common data for the current system
     common_data = ["COMMONDATA_NWCG_AGENCIES","COMMONDATA_NWCG_UNITS","COMMONDATA_STATES"]
     for d in common_data:
-        xlPath = "../../data/raw/excel/2014/{}.xlsx".format(d)
+        xlPath = os.path.join(data_dir, 'raw', 'excel', '2014', "{}.xlsx".format(d))
         xl = pd.ExcelFile(xlPath)
         df = xl.parse(0)
-        df.to_csv("../../data/out/{}_2014.csv".format(d))
+        df.to_csv(os.path.join(out_dir, "{}_2014.csv".format(d)))
     
                                                                                    
 

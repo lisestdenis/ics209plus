@@ -2,15 +2,17 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import ics209util
+import earthpy as et
 
 lgcy_timespan = '1999to2002'
 hist_timespan = '2001to2013'
-curr_timespan = '2014'
-final_timespan = '1999to2014'
+curr_timespan = '2014to2020'
+final_timespan = '1999to2020'
 allhist_timespan = '1999to2013'
 
-fod_version = '20190820'
-cpx_version = '20190815'
+#fod_version = '20210104'
+fod_version = '20210504'
+cpx_version= '20190815'
 
 def _historical1_rename_columns(df_h1):
     # rename columns
@@ -44,11 +46,12 @@ def _historical2_rename_columns(df_h2):
     df_h2.columns = df_h2.columns.str.replace('COUNTY','POO_COUNTY')
     df_h2.columns = df_h2.columns.str.replace('START_DATE','DISCOVERY_DATE') # order matters, must preceed next row
     df_h2.columns = df_h2.columns.str.replace('DEMOBE_START','PROJ_SIG_RES_DEMOB_START_DATE')
-    df_h2.columns = df_h2.columns.str.replace('EST_FINAL_AREA','PROJ_INCIDENT_AREA')
+    df_h2.columns = df_h2.columns.str.replace('EST_FINAL_AREA_NUM','PROJ_INCIDENT_AREA')
     df_h2.columns = df_h2.columns.str.replace('EST_FINAL_COSTS','PROJECTED_FINAL_IM_COST')
     df_h2.columns = df_h2.columns.str.replace('EXP_CONTAIN','EXPECTED_CONTAINMENT_DATE')
     df_h2.columns = df_h2.columns.str.replace('FUELS','HAZARDS_MATLS_INVOLVMENT_NARR')
     df_h2.columns = df_h2.columns.str.replace('IC_NAME','INCIDENT_COMMANDERS_NARR')
+    df_h2.columns = df_h2.columns.str.replace('IMT_TYPE_DESC','INC_MGMT_ORG_DESC')
     df_h2.columns = df_h2.columns.str.replace('IMT_TYPE','INC_MGMT_ORG_ABBREV')
     df_h2.columns = df_h2.columns.str.replace('LATITUDE','POO_LATITUDE')
     df_h2.columns = df_h2.columns.str.replace('LONGITUDE','POO_LONGITUDE')
@@ -80,23 +83,18 @@ def _final_alignments(df):
     
     # date formatting and DOY variables
     df['DISCOVERY_DATE'] = pd.to_datetime(df.DISCOVERY_DATE, errors='coerce')
+    df['DISCOVERY_DOY'] = df.DISCOVERY_DATE.dt.dayofyear
     df['REPORT_TO_DATE'] = pd.to_datetime(df.REPORT_TO_DATE, errors='coerce')
     df['REPORT_DOY'] = df.REPORT_TO_DATE.dt.dayofyear
     df['DISCOVERY_DATE_CORRECTED'] = pd.to_datetime(df.DISCOVERY_DATE_CORRECTED, errors='coerce')
-    df.loc[df.DISCOVERY_DATE.isnull(),'DISCOVERY_DATE'] = df.REPORT_TO_DATE
-    df['DISCOVERY_DOY'] = df.DISCOVERY_DATE.dt.dayofyear
-    df['EXPECTED_CONTAINMENT_DATE'] = pd.to_datetime(df.EXPECTED_CONTAINMENT_DATE, errors='coerce')
-    df['PROJ_SIG_RES_DEMOB_START_DATE'] = pd.to_datetime(df.PROJ_SIG_RES_DEMOB_START_DATE, errors='coerce')
      
     df.loc[(df.DISCOVERY_DATE_CORRECTED.notnull()) & (df.INCTYP_ABBREVIATION.isin(['WF','WFU'])) & \
            (df.DISCOVERY_DATE != df.DISCOVERY_DATE_CORRECTED),'DISCOVERY_DATE'] = df.DISCOVERY_DATE_CORRECTED
     
-    df[['GACC_PRIORITY']] = df[["GACC_PRIORITY"]].apply(pd.to_numeric,errors='coerce')
-    
     return df
 
 def _drop_extra_columns(df):
-    df = df.drop(['ACTIVE','ANTICIPATED_COMPLETION_DATE','APPROVED_BY','APPROVED_DATE',\
+    df = df.drop(['ACTIVE','APPROVED_BY','APPROVED_DATE',\
                  'AREA_MEASUREMENT','CAUSE_IDENTIFIER','COMMUNITIES_THREATENED_12',\
                  'COMMUNITIES_THREATENED_24','COMMUNITIES_THREATENED_48','COMMUNITIES_THREATENED_72',\
                  'COMPLEXITY_LEVEL_IDENTIFIER','CONTROLLED_DATE','CREATED_BY','CREATED_DATE',\
@@ -106,24 +104,20 @@ def _drop_extra_columns(df):
                  'CURRENT_THREAT_GT72','CURR_INC_AREA_UOM_IDENTIFIER','DATA_ENTRY_STATUS',\
                  'DONWCGU_PROT_UNIT_IDENTIFIER','DOU_IDENTIFIER','EST_CONTROL','FUEL_MODEL_IDENTIFIER',\
                  'GACC_OBS_FIRE_BEHAVE','GACC_PLANNED_ACTIONS','GACC_REMARKS','GACC_SIGNIF_EVENTS_SUMMARY',\
-                 'HOUR','INC_MGMT_ORG_IDENTIFIER','ITYPE','LAST_MODIFIED_BY',\
-                 'LAST_MODIFIED_DATE','LAST_EDIT','LATDEG','LATMIN','LONGDEG','LONGMIN','LINE_MEASUREMENT',\
+                 'HOUR','INC_MGMT_ORG_IDENTIFIER','INC_MGMT_ORG_ABBREV','ITYPE','LAST_MODIFIED_BY',\
+                 'LAST_MODIFIED_DATE','LATDEG','LATMIN','LONGDEG','LONGMIN','LINE_MEASUREMENT',\
                  'LINE_TO_BUILD','LINE_TO_BUILD_NUM','LOCAL_TIMEZONE_IDENTIFIER','MANAGEMENT_CODE',\
                  'NEWACRES','NO_EVACUATION','NO_LIKELY','OWNERSHIP_STATE','OWNERSHIP_STATE','OWNERSHIP_UNITID',\
-                 'PCT_CONT_COMPL_UOM_IDENTIFIER','PERCENT_MMA','POO_COUNTY_CODE',\
-                 'POO_DONWCGU_OWN_IDENTIFIER','POO_LD_PM_IDENTIFIER',\
-                 'POO_LD_QTR_QTR_QTR_QTR_SEC','POO_LD_QTR_QTR_QTR_SEC','INCTYP_IDENTIFIER',\
-                 'POO_STATE_CODE','POO_US_NGR_XCOORD','POO_US_NGR_YCOORD','POO_US_NGR_ZONE',\
-                 'POO_UTM_EASTING','POO_UTM_NORTHING','POO_UTM_ZONE','PREPARED_BY','PREPARED_DATE',\
+                 'PCT_CONT_COMPL_UOM_IDENTIFIER','PERCENT_MMA',\
+                 'INCTYP_IDENTIFIER','PREPARED_BY','PREPARED_DATE','FOD_LATITUDE','FOD_LONGITUDE',\
                  'PRIMARY_FUEL_MODEL','PROJECTED_ACTIVITY_12','PROJECTED_ACTIVITY_24','PROJECTED_ACTIVITY_48',\
                  'PROJECTED_ACTIVITY_72','PROJECTED_ACTIVITY_GT72','PROJECTED_MOVEMENT','PROJECTED_MOVEMENT24',\
                  'PROJECTED_MOVEMENT48','PROJECTED_MOVEMENT72','PROJ_INC_AREA_UOM_IDENTIFIER','REPORT_DATE',\
-                 'REPORT_NUMBER','RES_THREAT','SENT_FROM','SENT_DATE','SENT_TO','SEQ_NUM','SINGLE_COMPLEX_FLAG',\
-                 'STRATEGIC_DISCUSSION',\
+                 'REPORT_NUMBER','RES_THREAT','SENT_FROM','SEQ_NUM','SINGLE_COMPLEX_FLAG','STRATEGIC_DISCUSSION',\
                  'STRATEGIC_OBJECTIVES','SUBMITTED_DATE','SUBMITTED_TO','C_RH','C_TEMP','C_WIND_SPEED',\
                  'C_WIND_DIRECTION','F_RH','F_TEMP','F_WIND_SPEED','F_WIND_DIRECTION',\
                  'WFIP_STAGE','lat_c','long_c','TYPE_INC','DISCOVERY_DATE_CORRECTED', 'FIRE_INCIDENT_NUMBER',\
-                 'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED'
+                  'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED'
                  ],axis=1)
  
     return df
@@ -142,8 +136,10 @@ def _general_field_cleaning(df):
 
 def _event_smoothing_prep(df):
     df['EVENT_ID'] = df['FIRE_EVENT_ID']
+    print(df.EVENT_ID.isnull().sum())
     df.loc[df.EVENT_ID.isnull(),'EVENT_ID'] =  df.INCIDENT_NUMBER.astype(str).str.strip() + "|" + \
                                                df.START_YEAR.astype(str) + "|1"
+    print(df.EVENT_ID.isnull().sum())
     df = df.sort_values(['EVENT_ID','REPORT_TO_DATE'])
     df = df.reset_index(drop=True)
     
@@ -388,23 +384,7 @@ def _event_forward_fill(df):
     df.ACRES.fillna(0,inplace=True)  
     return df
 
-def _report_day_span(date1,date2):
-    
-    date1 = pd.to_datetime(date1)
-    date2 = pd.to_datetime(date2)
-    doy1 = date1.dayofyear
-    doy2 = date2.dayofyear
-    if (date2 < date1) | (doy1 == doy2): #discovery date after report date or doy2 == doy1
-        return 1
-    elif (date1.year == date2.year):
-        return (date2.dayofyear - date1.dayofyear)
-    else:
-        end_str = str(date1.year) + "-12-31"
-        endofyear = pd.Period(end_str,freq='D')
-        return ((endofyear.dayofyear-date1.dayofyear)+date2.dayofyear) 
-
 def _event_smoothing_pass(df):
-    df.to_csv('../../data/tmp/before_event_smooth.csv')
     rows = df.shape[0]
     df['NEW_ACRES'] = 0.0
     df['REPORT_DAY_SPAN'] = 0
@@ -431,15 +411,14 @@ def _event_smoothing_pass(df):
                 df['ACRES'].iloc[i-1] = df.iloc[i].ACRES # adjust acres down
             if np.isfinite(df.iloc[i].ACRES) & np.isfinite(df.iloc[i-1].ACRES):
                 df['NEW_ACRES'].iloc[i] = df.iloc[i].ACRES - df.iloc[i-1].ACRES
-                df['REPORT_DAY_SPAN'].iloc[i] = _report_day_span(df.iloc[i-1].REPORT_TO_DATE,df.iloc[i].REPORT_TO_DATE)
-                                                            
-        else: # at the boundary of event
+                df['REPORT_DAY_SPAN'].iloc[i] = df.iloc[i].REPORT_DOY - df.iloc[i-1].REPORT_DOY
+        else: # at the boundary of even
             df['NEW_ACRES'].iloc[i] = df.iloc[i].ACRES
-            df['REPORT_DAY_SPAN'].iloc[i] = _report_day_span(df.iloc[i].DISCOVERY_DATE,df.iloc[i].REPORT_TO_DATE)
-                                                             
+            df['REPORT_DAY_SPAN'].iloc[i] = df.iloc[i].REPORT_DOY - df.iloc[i].DISCOVERY_DOY 
     # set values for row 0
     df['NEW_ACRES'].iloc[0] = df.iloc[0].ACRES
-    df['REPORT_DAY_SPAN'].iloc[0] = _report_day_span(df.iloc[0].DISCOVERY_DATE,df.iloc[0].REPORT_TO_DATE)
+    df['REPORT_DAY_SPAN'].iloc[0] = df.iloc[0].REPORT_DOY - df.iloc[0].DISCOVERY_DOY
+    
     
     # forward smoothing
     print("Forward smoothing pass...")
@@ -501,7 +480,7 @@ def _calculate_fire_statistics(df):
     e_grp_final = df.sort_values(['INCIDENT_ID','FIRE_EVENT_ID',\
                                     'REPORT_TO_DATE']).groupby(['INCIDENT_ID','FIRE_EVENT_ID']).nth(-1)
     e_grp_final = e_grp_final.reset_index()
-    e_grp_final = e_grp_final.drop(e_grp_final[(e_grp_final.EVENT_ID == "2014|WA-WFS-513|1")].index)
+    e_grp_final = e_grp_final.drop(e_grp_final[(e_grp_final.EVENT_ID == "2014.0|WA-WFS-513|1")].index)
     e_grp_final = e_grp_final[['INCIDENT_ID','FIRE_EVENT_ID','ACRES']].copy()
     e_grp_final.columns = ['INCIDENT_ID','FIRE_EVENT_ID','EVENT_FINAL_ACRES']
 
@@ -518,19 +497,15 @@ def _calculate_fire_statistics(df):
     df.loc[df.ACRES.notnull() & df.FIRE_MAX_ACRES.notnull(),'MAX_FIRE_PCT_FINAL_SIZE'] = df.ACRES/df.FIRE_MAX_ACRES
     df = df.drop(['EVENT_PCT_FINAL_SIZE'],axis=1)
     df = df.drop(['FIRE_MAX_ACRES'],axis=1)
-    df = df.drop(['EVENT_FINAL_ACRES'],axis=1)
-    df = df.drop(['EVENT_ID'],axis=1)
         
     return df
 
 def _create_incident_summary(wfdf):
     wfinc_1st = wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby(['INCIDENT_ID']).first()
-    wfinc_1st = wfinc_1st.reset_index()
-    wfinc_1st = wfinc_1st[['INCIDENT_ID','REPORT_TO_DATE']]
-    wfinc_1st.columns = ['INCIDENT_ID','INITIAL_REPORT_DATE']
                                                                             
     wfinc_df = wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby('INCIDENT_ID').nth(-1)
     wfinc_df = wfinc_df.reset_index()
+    print(wfinc_df.loc[wfinc_df.INC_IDENTIFIER == 4379626])
     
     # take a subset of columns
     wfincdf = wfinc_df[['INCIDENT_ID','INCIDENT_NUMBER','INCIDENT_NAME','INCTYP_ABBREVIATION',\
@@ -539,10 +514,7 @@ def _create_incident_summary(wfdf):
                     'LL_CONFIDENCE','LL_UPDATE','LOCAL_TIMEZONE','POO_CITY','POO_COUNTY','POO_LATITUDE',\
                     'POO_LONGITUDE','POO_SHORT_LOCATION_DESC','POO_STATE','PROJECTED_FINAL_IM_COST','START_YEAR',\
                     'SUPPRESSION_METHOD','STR_DAMAGED','STR_DAMAGED_COMM','STR_DAMAGED_RES','STR_DESTROYED',\
-                    'STR_DESTROYED_COMM','STR_DESTROYED_RES','REPORT_TO_DATE']].copy()
-    
-    wfincdf = pd.merge(wfincdf,wfinc_1st,on=['INCIDENT_ID'],how='left')
-    wfincdf['INITIAL_REPORT_DATE'] = pd.to_datetime(wfincdf.INITIAL_REPORT_DATE)
+                    'STR_DESTROYED_COMM','STR_DESTROYED_RES','REPORT_TO_DATE','INCIDENT_ID_OLD']].copy()
     
     # rename columns
     wfincdf.columns = wfincdf.columns.str.replace('ACRES','FINAL_ACRES')
@@ -627,261 +599,186 @@ def _create_incident_summary(wfdf):
     wfincdf = pd.merge(wfincdf,maxgrowth,on=['INCIDENT_ID'],how='left')
     wfincdf['WF_MAX_GROWTH_DATE'] = pd.to_datetime(wfincdf.WF_MAX_GROWTH_DATE)
     wfincdf['WF_MAX_GROWTH_DOY'] = wfincdf.WF_MAX_GROWTH_DATE.dt.dayofyear
-    # growth duration accounting for fires that span annual boundary
-    wfincdf['DISCOVERY_DATE'] = pd.to_datetime(wfincdf.DISCOVERY_DATE)
-    wfincdf['DISCOVERY_DOY'] = wfincdf.DISCOVERY_DATE.dt.dayofyear
-    # account for overlap annual boundary and errors in discovery date
-    wfincdf.loc[((wfincdf.DISCOVERY_DATE < wfincdf.WF_CESSATION_DATE) & \
-                 (wfincdf.DISCOVERY_DATE.dt.year == wfincdf.WF_CESSATION_DATE.dt.year)),\
-                'WF_GROWTH_DURATION'] = wfincdf.WF_CESSATION_DOY - wfincdf.DISCOVERY_DOY
-    wfincdf.loc[((wfincdf.DISCOVERY_DATE > wfincdf.WF_CESSATION_DATE) & \
-                 (wfincdf.DISCOVERY_DATE.dt.year == wfincdf.WF_CESSATION_DATE.dt.year)),\
-                'WF_GROWTH_DURATION'] = wfincdf.WF_CESSATION_DOY - wfincdf.INITIAL_REPORT_DATE.dt.dayofyear
-    wfincdf.loc[((wfincdf.DISCOVERY_DATE < wfincdf.WF_CESSATION_DATE) &\
-                 (wfincdf.DISCOVERY_DATE.dt.year != wfincdf.WF_CESSATION_DATE.dt.year)), 
-                'WF_GROWTH_DURATION'] = (365 - wfincdf.DISCOVERY_DOY) + wfincdf.WF_CESSATION_DOY
-    wfincdf.loc[((wfincdf.DISCOVERY_DATE > wfincdf.WF_CESSATION_DATE) &\
-                 (wfincdf.DISCOVERY_DATE.dt.year != wfincdf.WF_CESSATION_DATE.dt.year)), 
-                'WF_GROWTH_DURATION'] = (365 - wfincdf.DISCOVERY_DOY) + wfincdf.INITIAL_REPORT_DATE.dt.dayofyear
-    
-    wfincdf = wfincdf.drop(['INITIAL_REPORT_DATE'],axis=1)
+    wfincdf['WF_GROWTH_DURATION'] = wfincdf.WF_CESSATION_DOY - wfincdf.DISCOVERY_DOY
     
     return wfincdf
 
 def _create_complex_associations():
+   
+    # Read in historical linking file and extract rows for complexes
     df_short = pd.read_excel('../../data/raw/excel/Short1999to2013v2.xlsx')
     cpx = df_short.loc[df_short.KS_COMPLEX_NAME.notnull()].copy()
-    cpx['KS_COMPLEX_NAME'] = cpx.KS_COMPLEX_NAME.astype(str).str.strip()
-    cpx['INCIDENT_ID_KS'] = cpx.INCIDENT_ID_KS.astype(str).str.strip()
-    cpx['INCIDENT_NUMBER'] = cpx.INCIDENT_NUMBER.astype(str).str.strip()
-    cpxR = cpx.groupby(['KS_COMPLEX_NAME','INCIDENT_ID_KS','INCIDENT_NUMBER','INCIDENT_NUMBER_CORRECTED',\
-                        'INCIDENT_NAME','INCIDENT_NAME_CORRECTED','START_YEAR']).size().reset_index(name='INC_MGMT_NUM_SITREPS')
-    cpxR.columns = ['COMPLEX_NAME','CPLX_INCIDENT_ID','INCIDENT_NUMBER','INCIDENT_NUMBER_CORRECTED','INCIDENT_NAME',\
-                    'INCIDENT_NAME_CORRECTED','START_YEAR','INC_MGMT_NUM_SITREPS']
+    # Strip the incident id column
+    cpx['INCIDENT_ID_KS'] = cpx.INCIDENT_ID_KS.str.strip().str.upper()
+    # Groupby and count the number of rows associated with this ID, rename to CPLX_INCIDENT_ID
+    cpxG = cpx.groupby(['INCIDENT_ID_KS']).INCIDENT_ID_KS.count().reset_index(name='NUM_FOD_RECORDS')
+    cpxG.columns = ['CPLX_INCIDENT_ID','NUM_FOD_RECORDS']
+    # Extract columns from INCIDENT ID
+    cpxG[['FIRE_YEAR','INCIDENT_NUMBER','COMPLEX_NAME']] = cpxG.CPLX_INCIDENT_ID.str.split('_',expand=True)
     
-    return cpxR
+    # Read in current cpx asc definitions
+    cpx_curr = pd.read_csv('../../data/raw/cpx_assocs/cpx-assocs2014to2018.csv')
+    cpx_curr = cpx_curr.loc[:, ~cpx_curr.columns.str.contains('^Unnamed')]
+    # Set FODJ_INCIDENT_ID
+    cpx_curr.loc[(cpx_curr.MEMBER_INC_IDENTIFIER == cpx_curr.CPLX_INC_IDENTIFIER),'INCIDENT_ID'] = cpx_curr.CPLX_INCIDENT_ID
+    cpx_curr.loc[(cpx_curr.MEMBER_INC_IDENTIFIER != cpx_curr.CPLX_INC_IDENTIFIER),'INCIDENT_ID'] = cpx_curr.MEMBER_INCIDENT_ID
+    
+    # Concatenate and sort
+    cpx_all = pd.concat([cpxG, cpx_curr])
+    cpx_all.sort_values(by=['INCIDENT_ID'], inplace=True)
+    cpx_all.to_csv('../../data/tmp/cpx-fod-all.csv')
+    
+    return cpx_all
+
+def get_largest_fod_fire(fod_fire_list):
+    for i in range(0,len(fod_fire_list)):
+        fod_fire_list[i] = eval(fod_fire_list[i])
+    df = pd.DataFrame(fod_fire_list)
+    max_row = df.loc[df.SIZE == df.SIZE.max()]
+    return max_row
+
+def _fod_merge(fod_agg, df):
+    
+    # Join fod_agg with incident data
+    print("Before merge...")
+    df = df.merge(fod_agg, on="INCIDENT_ID", how='left')
+    df.to_csv('../../data/tmp/fod-agg-merge-out.csv')
+    
+    merge_col = "INCIDENT_ID"
+     
+     # Multiple fires case:
+    fod_fires = df.loc[df.FOD_FIRE_NUM>=1].copy()
+    fod_fires = fod_fires[['INCIDENT_ID','FOD_FIRE_LIST']]
+    
+    
+    for i in range(0,fod_fires.shape[0]):
+    #for i in range(0,4):
+        max_row = get_largest_fod_fire(fod_fires.iloc[i].FOD_FIRE_LIST)
+        df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FOD_ID'] = max_row.iloc[0]['ID']
+        if 'COORDS' in max_row.columns:
+            df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FIRE_LATITUDE'] = max_row.iloc[0]['COORDS'][0]
+            df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FIRE_LONGITUDE'] = max_row.iloc[0]['COORDS'][1]
+        if 'MTBS_ID' in max_row.columns:
+            df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_MTBS_FIRE_INFO'] = max_row.iloc[0]['MTBS_ID']
+    df['LRGST_FIRE_COORDS'] = df[['LRGST_FIRE_LATITUDE', 'LRGST_FIRE_LONGITUDE']].apply(tuple, axis=1)
+    
+    fod_fires.to_csv('../../data/tmp/fod-fire-data.csv')
+    
+    return df
+
+
+def _fod_aggregation(inc_df, cpx_df):
+    print("Aggregating fod...")
+    
+    # Read FOD join dataset & fill in missing incident IDs (2014+)
+    fod_df = pd.read_csv('../../data/raw/excel/fod/FOD_JOIN_{}ics.csv'.format(fod_version), low_memory=False)
+    fod_df = fod_df.loc[:, ~fod_df.columns.str.contains('^Unnamed')]
+    fod_df = fod_df.loc[~fod_df.FODJ_INCIDENT_ID.isnull()]
+    fod_df['FODJ_INCIDENT_ID'] = fod_df.FODJ_INCIDENT_ID.astype(str).str.strip().str.upper()
+    print(fod_df.loc[fod_df.FODJ_INCIDENT_ID == "2015_2768749_KWETHLUK RIVER # 2"])
+    
+    # pare down FOD columns
+    fod_cols = fod_df[['FOD_ID','MTBS_ID','MTBS_FIRE_NAME','NWCG_GENERAL_CAUSE',
+                       'FIRE_SIZE','LATITUDE','LONGITUDE',
+                       'DISCOVERY_DOY','CONT_DOY','ICS_209_PLUS_INCIDENT_JOIN_ID','ICS_COMPLEX_NAME',
+                       'FIRE_NAME_LINK','MEMBER_INC_IDENTIFIER','CPLX_INC_IDENTIFIER','CPLX_INCIDENT_ID',
+                       'INCIDENT_ID','FODJ_INCIDENT_ID']].copy()
+    
+    
+    fod_cols.loc[fod_cols.ICS_209_PLUS_INCIDENT_JOIN_ID == "2003_ND-SRA-248_TWENTY FOUR", 'MTBS_FIRE_NAME'] = "TWENTY FOUR"
+    print(fod_cols.shape)
+    fod_cols.to_csv('../../data/tmp/fod-cols.csv')
+    
+    # create FOD Coordinates
+    fod_cols['FOD_COORD_LIST'] = list(zip(fod_cols.LATITUDE,fod_cols.LONGITUDE))
+    # create MTBS ID String
+    fod_cols.loc[fod_cols.MTBS_ID.notnull(),'MTBS_STR'] = ", \"MTBS_ID\" : \"" + fod_cols.MTBS_ID.astype(str).str.strip() + \
+                        "(" + fod_cols.MTBS_FIRE_NAME.astype(str).str.strip() + ")\""  
+    fod_cols.loc[fod_cols.MTBS_ID.notnull(),'MTBS_IDS'] = fod_cols.MTBS_ID.astype(str).str.strip() + "-" + \
+                                                         fod_cols.MTBS_FIRE_NAME.astype(str).str.strip()
+    fod_cols.loc[fod_cols.MTBS_ID.isnull(),'MTBS_STR'] = ""
+    fod_cols.loc[fod_cols.MTBS_ID.isnull(),'MTBS_IDS'] = ""
+   
+
+    fod_cols.loc[fod_cols.CONT_DOY.notnull(),'FOD_CONT_STR'] = fod_cols.CONT_DOY.astype(str)
+    fod_cols.loc[fod_cols.CONT_DOY.isnull(),'FOD_CONT_STR'] = "\"unknown\""
+
+    fod_cols.loc[fod_cols.DISCOVERY_DOY.notnull(),'FOD_DISC_STR'] = fod_cols.DISCOVERY_DOY.astype(str)
+    fod_cols.loc[fod_cols.DISCOVERY_DOY.isnull(),'FOD_DISC_STR'] = "\"unknown\""
+    
+    
+    fod_cols['FOD_STR'] = "{\"ID\" : " + fod_cols.FOD_ID.astype(str) +\
+                          fod_cols.MTBS_STR +\
+                          ", \"COORDS\" : " + fod_cols.FOD_COORD_LIST.astype(str) +\
+                          ", \"CAUSE\" : \"" + fod_cols.NWCG_GENERAL_CAUSE.astype(str) + "\"" +\
+                          ", \"SIZE\" : " + fod_cols.FIRE_SIZE.astype(str) +\
+                          ", \"DISC\" : " + fod_cols.FOD_DISC_STR +\
+                          ", \"CONT\" : " + fod_cols.FOD_CONT_STR +\
+                          "}"
+    fod_cols['FOD_COUNT'] = 0
+    
+    fod_agg = fod_cols.groupby('FODJ_INCIDENT_ID',as_index=False).agg({
+                                            'FOD_ID': lambda x: list(x),
+                                            'FOD_COUNT': 'count',
+                                            'MTBS_IDS': lambda x: list(filter(None, x)),
+                                            'DISCOVERY_DOY': 'min',
+                                            'CONT_DOY':'max',
+                                            'NWCG_GENERAL_CAUSE': lambda x: list(x),
+                                            'FIRE_SIZE' : lambda x : sum(x),
+                                            'FOD_STR' : lambda x: list(x),
+                                            'FOD_COORD_LIST' : lambda x: list(x),
+                         }).rename(columns={'FOD_ID': 'FOD_ID_LIST',
+                                            'FOD_COUNT': 'FOD_FIRE_NUM',
+                                            'MTBS_IDS': 'MTBS_FIRE_LIST',
+                                            'DISCOVERY_DOY': 'FOD_DISCOVERY_DOY',
+                                            'CONT_DOY': 'FOD_CONTAIN_DOY',
+                                            'NWCG_GENERAL_CAUSE': 'FOD_CAUSE',
+                                            'FIRE_SIZE' : 'FOD_FINAL_ACRES',
+                                            'FOD_STR' : 'FOD_FIRE_LIST',
+                                            'FOD_COORD_LIST' : 'FOD_COORD_LIST',
+                                            })
+    
+    #'FOD_STR' : lambda x: "[%s]" % ', '.join(x.astype(str)),
+    fod_agg['FOD_CAUSE'] = fod_agg.FOD_CAUSE.apply(lambda x: pd.unique(x))
+    fod_agg['FOD_CAUSE_NUM'] = fod_agg.FOD_CAUSE.apply(lambda x: len(x))
+    fod_agg['FOD_COORD_LIST'] = fod_agg.FOD_COORD_LIST.apply(lambda x: pd.unique(x))
+    fod_agg['FOD_COORD_NUM'] = fod_agg['FOD_COORD_LIST'].apply(lambda x: len(x))
+    fod_agg['MTBS_FIRE_LIST'] = fod_agg.MTBS_FIRE_LIST.apply(lambda x: pd.unique(x))
+    fod_agg['MTBS_FIRE_NUM'] = fod_agg.MTBS_FIRE_LIST.apply(lambda x: len(x))
+    fod_agg.loc[fod_agg.MTBS_FIRE_NUM == 0, 'MTBS_FIRE_LIST'] = np.nan
+    fod_agg.rename(columns={"FODJ_INCIDENT_ID": "INCIDENT_ID"}, inplace=True)
+    
+    fod_agg.to_csv('../../data/tmp/fod-agg-out.csv')
+    
+    print("Merging incidents with FOD...")
+    inc_fod = _fod_merge(fod_agg, inc_df)
+    inc_fod.to_csv('../../data/tmp/inc-fod-out.csv')
+    print("Merging complexes with FOD...")
+    #cpx_fod = _fod_merge(fod_agg,cpx_df)
+    
+    return inc_fod
 
 def _join_with_fod_database(inc_df):
-    fod_df = pd.read_excel('../../data/raw/excel/fod/FOD_JOIN_{}.xlsx'.format(fod_version))
-    cplx_2014 = pd.read_excel('../../data/raw/excel/fod/FOD_CPLX_REF_2014.xlsx')
-    cplx_2014 = cplx_2014.loc[:, ~cplx_2014.columns.str.contains('^Unnamed')]
-    cplx_2014['CPLX_INCIDENT_ID'] = cplx_2014.CPLX_INCIDENT_ID.astype(str).str.strip()
-    # strip leading/trailing characters
-    fod_df['ICS_209_PLUS_INCIDENT_ID'] = fod_df.ICS_209_PLUS_INCIDENT_ID.astype(str).str.strip().str.upper()
-
-    # get the number of FOD IDs associated with incident and link into incident record.
-    fod_count = fod_df.groupby(['ICS_209_PLUS_INCIDENT_ID']).size().reset_index(name='FOD_NUM_FIRES')
-    fod_count.columns = ['INCIDENT_ID','FOD_NUM_FIRES'] # number of FOD records for each incident ID
-    inc_df = pd.merge(inc_df,fod_count,on=['INCIDENT_ID'],how='left')
-
-    # pare down FOD columns and create join with incident record where at least one record
-    fod_cols = fod_df[['FOD_ID','MTBS_ID','MTBS_FIRE_NAME','STAT_CAUSE_CODE','STAT_CAUSE_DESCR',\
-                'FIRE_SIZE','FIRE_SIZE_CLASS','LATITUDE','LONGITUDE','OWNER_DESCR',
-               'DISCOVERY_DOY','CONTAIN_DOY','ICS_209_PLUS_INCIDENT_ID','COMPLEX_NAME']]
-    fod_cols.columns = ['FOD_IDL','MTBS_IDL','MTBS_FIRE_NAMEL','FOD_CAUSE_CODE','FOD_CAUSE_DESCR',
-                   'FOD_FIRE_SIZE','FOD_FIRE_SIZE_CLASSL','FOD_LATITUDEL','FOD_LONGITUDEL','FOD_OWNER_DESCRL',\
-                   'FOD_DISCOVERY_DOY','FOD_CONTAIN_DOY','INCIDENT_ID','FOD_COMPLEX_NAME']
-    fod_obj = pd.merge(fod_count,fod_cols,on='INCIDENT_ID',how='left')
-
-
-    # create aggregate columns
-    fod_obj['FOD_COORDS'] = list(zip(fod_obj.FOD_LATITUDEL,fod_obj.FOD_LONGITUDEL))
-    fod_obj.loc[fod_obj.MTBS_IDL.notnull(),'MTBS_STRL'] = ", \"MTBS_ID\" : \"" + fod_obj.MTBS_IDL.astype(str).str.strip() + \
-                        "(" + fod_obj.MTBS_FIRE_NAMEL.astype(str).str.strip() + ")\""  
-    fod_obj.loc[fod_obj.MTBS_IDL.isnull(),'MTBS_STRL'] = ""
-
-    fod_obj.loc[fod_obj.FOD_CONTAIN_DOY.notnull(),'FOD_CONT_STR'] = fod_obj.FOD_CONTAIN_DOY.astype(str)
-    fod_obj.loc[fod_obj.FOD_CONTAIN_DOY.isnull(),'FOD_CONT_STR'] = "\"unknown\""
-
-    fod_obj.loc[fod_obj.FOD_DISCOVERY_DOY.notnull(),'FOD_DISC_STR'] = fod_obj.FOD_DISCOVERY_DOY.astype(str)
-    fod_obj.loc[fod_obj.FOD_DISCOVERY_DOY.isnull(),'FOD_DISC_STR'] = "\"unknown\""
-
-
-    fod_obj['FOD_OBJ'] =  "{\"ID\" : " + fod_obj.FOD_IDL.astype(str) + fod_obj.MTBS_STRL + ", \"COORDS\" : " +\
-                            fod_obj.FOD_COORDS.astype(str) + "}"
-
-    fod_obj['FOD_OBJ'] =  "{\"ID\" : " + fod_obj.FOD_IDL.astype(str) + fod_obj.MTBS_STRL + ", \"COORDS\" : " +\
-                        fod_obj.FOD_COORDS.astype(str) + ", \"CAUSE\" : \"" + fod_obj.FOD_CAUSE_CODE.astype(str) + "(" +\
-                        fod_obj.FOD_CAUSE_DESCR.astype(str) + ")\", \"SIZE\" : " + fod_obj.FOD_FIRE_SIZE.astype(str) + ", \"DISC\" : " +\
-                        fod_obj.FOD_DISC_STR + ", \"CONT\" : " + fod_obj.FOD_CONT_STR + "}"
-
-    print("creating agg")
-    # create grouped aggregate record
-    fod_agg = fod_obj.groupby('INCIDENT_ID',as_index=False).agg({  
-                                                          'FOD_IDL': lambda x: list(x),
-                                                          'MTBS_FIRE_NAMEL': lambda x: list(x),
-                                                          'MTBS_IDL': lambda x: list(x),
-                                                          'MTBS_STRL': lambda x: list(x),
-                                                          'FOD_DISCOVERY_DOY': min,
-                                                          'FOD_CONTAIN_DOY': max,
-                                                          'FOD_CAUSE_CODE': lambda x: pd.unique(x),
-                                                          'FOD_CAUSE_DESCR': lambda x: pd.unique(x),
-                                                          'FOD_FIRE_SIZE': lambda x: sum(x),
-                                                          'FOD_LATITUDEL': lambda x: list(x),
-                                                          'FOD_LONGITUDEL': lambda x: list(x),
-                                                          'FOD_COMPLEX_NAME': lambda x: pd.unique(x),
-                                                          'FOD_OBJ': lambda x: "[%s]" % ', '.join(x.astype(str))
-    })
-    fod_agg['FOD_LIST'] = fod_agg.FOD_OBJ.str.findall('\{.*?\}')
-    inc_df = pd.merge(inc_df,fod_agg,on='INCIDENT_ID',how='left')
-    inc_df['FOD_ID'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['FOD_IDL'].str[0]
-    inc_df['MTBS_ID'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['MTBS_IDL'].str[0]
-    inc_df['MTBS_FIRE_NAME'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['MTBS_FIRE_NAMEL'].str[0]
-    inc_df['FOD_LATITUDE'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['FOD_LATITUDEL'].str[0]
-    inc_df['FOD_LONGITUDE'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['FOD_LONGITUDEL'].str[0]
-    inc_df.to_csv('../../data/tmp/fodbefore_join.csv')
-
-    print("getting multifod")
-    multi_fod = inc_df.loc[inc_df.FOD_NUM_FIRES>1].copy()
-    tbl_data = [] # holds dictionary records returned from fod search
-    multi_fod = multi_fod[['INCIDENT_ID','FOD_LIST']]
-    for i in range(0,multi_fod.shape[0]-1):
-        largest = ics209util.get_largest_fod_rec(multi_fod.iloc[i].FOD_LIST)
-        largest['INCIDENT_ID'] = multi_fod.iloc[i].INCIDENT_ID # add incident id to dictionary
-        tbl_data.append(largest)
-    mfod_df = pd.DataFrame(tbl_data)
-    mfod_df.columns = ['TMP_CAUSE','LRGST_CONT','LRGST_COORDS','LRGST_DISC','LRGST_ID','INCIDENT_ID','TMP_MTBS_ID','LRGST_SIZE']
-    mfod_df['LRGST_MTBS_ID'] = mfod_df.TMP_MTBS_ID.str.extract(r'(^[A-Z][A-Z][A-Z\d\-]*)')
-    mfod_df['LRGST_MTBS_FIRE_NAME'] = mfod_df.TMP_MTBS_ID.str.extract(r'(\([\w\s\d#\-\.\'\&]*\(?[\w\s\d#-]*\)+)')
-    mfod_df['LRGST_LATITUDE'] = mfod_df['LRGST_COORDS'][0][0]
-    mfod_df['LRGST_LONGITUDE'] = mfod_df['LRGST_COORDS'][0][1]
-    mfod_df.to_csv('../../data/tmp/mfod_df.csv')
-
-    inc_df = pd.merge(inc_df,mfod_df,on='INCIDENT_ID',how='left')
-
-    inc_df.loc[inc_df.FOD_NUM_FIRES>1,'FOD_ID'] = inc_df.LRGST_ID
-    inc_df.loc[inc_df.FOD_NUM_FIRES>1,'MTBS_ID'] = inc_df.LRGST_MTBS_FIRE_NAME
-    inc_df.loc[inc_df.FOD_NUM_FIRES>1,'FOD_LATITUDE'] = inc_df.LRGST_LATITUDE
-    inc_df.loc[inc_df.FOD_NUM_FIRES>1,'FOD_LONGITUDE'] = inc_df.LRGST_LONGITUDE
-    inc_df.to_csv('../../data/tmp/inc_predrop.csv')
-
-    print("drop")
-    inc_df = inc_df.drop(['FOD_IDL','MTBS_FIRE_NAMEL','MTBS_IDL','TMP_CAUSE','LRGST_CONT','LRGST_COORDS',\
-                          'FOD_LATITUDEL','FOD_LONGITUDEL','MTBS_STRL','LRGST_ID','LRGST_MTBS_ID','LRGST_DISC',\
-                          'TMP_MTBS_ID','LRGST_SIZE','LRGST_MTBS_FIRE_NAME','LRGST_LATITUDE','LRGST_LONGITUDE'],axis=1)
     
-    inc_df.to_csv('../../data/tmp/inc_final.csv')
-
-    # Create the complex associations table and link fod object with it as well.
-    cpx_obj = fod_agg[['INCIDENT_ID','FOD_LIST']].copy()
-    cpx_obj.columns = ['CPLX_INCIDENT_ID','FOD_LIST']
-    hist_cpx = _create_complex_associations()
-    hist_cpx = pd.merge(hist_cpx,cpx_obj,on='CPLX_INCIDENT_ID',how='left')
-    hist_cpx.to_csv('../../data/out/ics209-plus-wf_complex_assocs_{}.csv'.format(allhist_timespan))
-
-    # Link FOD IDs into 2014 complex ref table as well and save
-    cplx_2014 = pd.merge(cplx_2014,cpx_obj,on='CPLX_INCIDENT_ID',how='left')
-    cplx_2014.to_csv('../../data/out/ics209-plus-wf-complex_assocs_{}.csv'.format(curr_timespan))
-
-    return inc_df
-
-def _join_with_fod_database2(inc_df):
-    fod_df = pd.read_excel('../../data/raw/excel/fod/FOD_JOIN_{}.xlsx'.format(fod_version))
-    cplx_2014 = pd.read_excel('../../data/raw/excel/fod/FOD_CPLX_REF_2014.xlsx')
-    cplx_2014 = cplx_2014.loc[:, ~cplx_2014.columns.str.contains('^Unnamed')]
-    cplx_2014['CPLX_INCIDENT_ID'] = cplx_2014.CPLX_INCIDENT_ID.astype(str).str.strip()
-    # strip leading/trailing characters
-    fod_df['ICS_209_PLUS_INCIDENT_ID'] = fod_df.ICS_209_PLUS_INCIDENT_ID.astype(str).str.strip().str.upper()
-
-    # get the number of FOD IDs associated with incident and link into incident record.
-    fod_count = fod_df.groupby(['ICS_209_PLUS_INCIDENT_ID']).size().reset_index(name='FOD_NUM_FIRES')
-    fod_count.columns = ['INCIDENT_ID','FOD_NUM_FIRES'] # number of FOD records for each incident ID
-    inc_df = pd.merge(inc_df,fod_count,on=['INCIDENT_ID'],how='left')
-
-    # pare down FOD columns and create join with incident record where at least one record
-    fod_cols = fod_df[['FOD_ID','MTBS_ID','MTBS_FIRE_NAME','STAT_CAUSE_CODE','STAT_CAUSE_DESCR',\
-                'FIRE_SIZE','FIRE_SIZE_CLASS','LATITUDE','LONGITUDE','OWNER_DESCR',
-               'DISCOVERY_DOY','CONTAIN_DOY','ICS_209_PLUS_INCIDENT_ID','COMPLEX_NAME']]
-    fod_cols.columns = ['FOD_IDL','MTBS_IDL','MTBS_FIRE_NAMEL','FOD_CAUSE_CODE','FOD_CAUSE_DESCR',
-                   'FOD_FIRE_SIZE','FOD_FIRE_SIZE_CLASSL','FOD_LATITUDEL','FOD_LONGITUDEL','FOD_OWNER_DESCRL',\
-                   'FOD_DISCOVERY_DOY','FOD_CONTAIN_DOY','INCIDENT_ID','FOD_COMPLEX_NAME']
-    fod_obj = pd.merge(fod_count,fod_cols,on='INCIDENT_ID',how='left')
-
-
-    # create aggregate columns
-    fod_obj['FOD_COORDS'] = list(zip(fod_obj.FOD_LATITUDEL,fod_obj.FOD_LONGITUDEL))
-    fod_obj.loc[fod_obj.MTBS_IDL.notnull(),'MTBS_STRL'] = ", \"MTBS_ID\" : \"" + fod_obj.MTBS_IDL.astype(str).str.strip() + \
-                        "(" + fod_obj.MTBS_FIRE_NAMEL.astype(str).str.strip() + ")\""  
-    fod_obj.loc[fod_obj.MTBS_IDL.isnull(),'MTBS_STRL'] = ""
-
-    fod_obj.loc[fod_obj.FOD_CONTAIN_DOY.notnull(),'FOD_CONT_STR'] = fod_obj.FOD_CONTAIN_DOY.astype(str)
-    fod_obj.loc[fod_obj.FOD_CONTAIN_DOY.isnull(),'FOD_CONT_STR'] = "\"unknown\""
-
-    fod_obj.loc[fod_obj.FOD_DISCOVERY_DOY.notnull(),'FOD_DISC_STR'] = fod_obj.FOD_DISCOVERY_DOY.astype(str)
-    fod_obj.loc[fod_obj.FOD_DISCOVERY_DOY.isnull(),'FOD_DISC_STR'] = "\"unknown\""
-
-
-    fod_obj['FOD_FIRE_LIST'] =  "{\"ID\" : " + fod_obj.FOD_IDL.astype(str) + fod_obj.MTBS_STRL + ", \"COORDS\" : " +\
-                            fod_obj.FOD_COORDS.astype(str) + "}"
-
-    fod_obj['FOD_FIRE_LIST'] =  "{\"ID\" : " + fod_obj.FOD_IDL.astype(str) + fod_obj.MTBS_STRL + ", \"COORDS\" : " +\
-                        fod_obj.FOD_COORDS.astype(str) + ", \"CAUSE\" : \"" + fod_obj.FOD_CAUSE_CODE.astype(str) + "(" +\
-                        fod_obj.FOD_CAUSE_DESCR.astype(str) + ")\", \"SIZE\" : " + fod_obj.FOD_FIRE_SIZE.astype(str) + ", \"DISC\" : " +\
-                        fod_obj.FOD_DISC_STR + ", \"CONT\" : " + fod_obj.FOD_CONT_STR + "}"
-
-    # create grouped aggregate record
-    fod_agg = fod_obj.groupby('INCIDENT_ID',as_index=False).agg({  
-                                                          'FOD_IDL': lambda x: list(x),
-                                                          'MTBS_FIRE_NAMEL': lambda x: list(x),
-                                                          'MTBS_IDL': lambda x: list(x),
-                                                          'MTBS_STRL': lambda x: list(x),
-                                                          'FOD_DISCOVERY_DOY': min,
-                                                          'FOD_CONTAIN_DOY': max,
-                                                          'FOD_CAUSE_CODE': lambda x: pd.unique(x),
-                                                          'FOD_CAUSE_DESCR': lambda x: pd.unique(x),
-                                                          'FOD_FINAL_ACRES': lambda x: sum(x),
-                                                          'FOD_LATITUDEL': lambda x: list(x),
-                                                          'FOD_LONGITUDEL': lambda x: list(x),
-                                                          'FOD_COMPLEX_NAME': lambda x: pd.unique(x),
-                                                          'FOD_OBJ': lambda x: "[%s]" % ', '.join(x.astype(str))
-    })
-    fod_agg['FOD_LIST'] = fod_agg.FOD_OBJ.str.findall('\{.*?\}')
-    inc_df = pd.merge(inc_df,fod_agg,on='INCIDENT_ID',how='left')
-    inc_df['FOD_ID'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['FOD_IDL'].str[0]
-    inc_df['MTBS_ID'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['MTBS_IDL'].str[0]
-    inc_df['MTBS_FIRE_NAME'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['MTBS_FIRE_NAMEL'].str[0]
-    inc_df['FOD_LATITUDE'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['FOD_LATITUDEL'].str[0]
-    inc_df['FOD_LONGITUDE'] = inc_df.loc[inc_df.FOD_NUM_FIRES==1]['FOD_LONGITUDEL'].str[0]
-
-    multi_fod = inc_df.loc[inc_df.FOD_NUM_FIRES>1].copy()
-    tbl_data = [] # holds dictionary records returned from fod search
-    multi_fod = multi_fod[['INCIDENT_ID','FOD_LIST']]
-    for i in range(0,multi_fod.shape[0]-1):
-        largest = ics209util.get_largest_fod_rec(multi_fod.iloc[i].FOD_LIST)
-        largest['INCIDENT_ID'] = multi_fod.iloc[i].INCIDENT_ID # add incident id to dictionary
-        tbl_data.append(largest)
-    mfod_df = pd.DataFrame(tbl_data)
-    mfod_df.columns = ['TMP_CAUSE','LRGST_CONT','LRGST_COORDS','LRGST_DISC','LRGST_ID','INCIDENT_ID','TMP_MTBS_ID','LRGST_SIZE']
-    mfod_df['LRGST_MTBS_ID'] = mfod_df.TMP_MTBS_ID.str.extract(r'(^[A-Z][A-Z][A-Z\d\-]*)')
-    mfod_df['LRGST_MTBS_FIRE_NAME'] = mfod_df.TMP_MTBS_ID.str.extract(r'(\([\w\s\d#\-\.\'\&]*\(?[\w\s\d#-]*\)+)')
-    mfod_df['LRGST_LATITUDE'] = mfod_df['LRGST_COORDS'][0][0]
-    mfod_df['LRGST_LONGITUDE'] = mfod_df['LRGST_COORDS'][0][1]
-
-    inc_df = pd.merge(inc_df,mfod_df,on='INCIDENT_ID',how='left')
-
-    inc_df['FOD_ID'] = inc_df.loc[inc_df.FOD_NUM_FIRES>1]['LRGST_ID']
-    inc_df['MTBS_ID'] = inc_df.loc[inc_df.FOD_NUM_FIRES>1]['LRGST_MTBS_ID']
-    inc_df['MTBS_FIRE_NAME'] = inc_df.loc[inc_df.FOD_NUM_FIRES>1]['LRGST_MTBS_FIRE_NAME']
-    inc_df['FOD_LATITUDE'] = inc_df.loc[inc_df.FOD_NUM_FIRES>1]['LRGST_LATITUDE']
-    inc_df['FOD_LONGITUDE'] = inc_df.loc[inc_df.FOD_NUM_FIRES>1]['LRGST_LONGITUDE']
-
-    inc_df = inc_df.drop(['FOD_IDL','MTBS_FIRE_NAMEL','MTBS_IDL','TMP_CAUSE','LRGST_CONT','LRGST_COORDS','FOD_OBJ',\
-                          'FOD_LATITUDEL','FOD_LONGITUDEL','MTBS_STRL','LRGST_ID','LRGST_MTBS_ID','LRGST_DISC',\
-                          'TMP_MTBS_ID','LRGST_SIZE','LRGST_MTBS_FIRE_NAME','LRGST_LATITUDE','LRGST_LONGITUDE'],axis=1)
-
-    # Create the complex associations table and link fod object with it as well.
-    cpx_obj = fod_agg[['INCIDENT_ID','FOD_LIST']].copy()
-    cpx_obj.columns = ['CPLX_INCIDENT_ID','FOD_LIST']
-    hist_cpx = _create_complex_associations()
-    hist_cpx = pd.merge(hist_cpx,cpx_obj,on='CPLX_INCIDENT_ID',how='left')
-    hist_cpx.to_csv('../../data/out/ics209-plus-wf_complex_assocs_{}.csv'.format(allhist_timespan))
-
-    # Link FOD IDs into 2014 complex ref table as well and save
-    cplx_2014 = pd.merge(cplx_2014,cpx_obj,on='CPLX_INCIDENT_ID',how='left')
-    cplx_2014.to_csv('../../data/out/ics209-plus-wf-complex_assocs_{}.csv'.format(curr_timespan))
+    cpx_df = _create_complex_associations()
     
-    return inc_df
+    # Hard-coded fixes for INCIDENT_ID
+    inc_df.loc[inc_df.INCIDENT_ID == "2015_2920368_CLEARWATER/MUNICIPAL COMPLEX",'INCIDENT_ID'] = \
+                                                     "2015_2920368_CLEARWATER/MUNICIPAL/MOTORWAY NORTH COMPLEX"
+    inc_df.loc[inc_df.INC_IDENTIFIER == 2882088,'INCIDENT_ID'] = \
+                                                     "2015_2882088_CORNET-WINDY RIDGE"
     
+    #inc_fod, cpx_fod = _fod_aggregation(inc_df,cpx_df)
+    inc_fod = _fod_aggregation(inc_df,cpx_df)
+    #no_fod = inc_df.loc[inc_df.FOD_FIRE_NUM.isnull()]
+    #no_fod = no_fod[['INCIDENT_ID','START_YEAR','FINAL_ACRES']]
+    #no_fod.to_csv('../../data/tmp/no-fod-inc-out.csv')
+    
+    inc_fod.to_csv('../../data/tmp/inc-fod-out.csv')
+    #cpx_fod.to_csv('../../data/tmp/cpx-fod-out.csv')
+    cpx_fod = cpx_df # temporary
+    
+    return inc_fod, cpx_fod
                      
 def create_final_datasets():
     
@@ -896,20 +793,20 @@ def create_final_datasets():
     
     # rename columns so that matching columns align
     df_h1 = _historical1_rename_columns(df_h1)
-    df_h1.to_csv('../../data/tmp/h1_rename.csv')
     df_h2 = _historical2_rename_columns(df_h2)
-    df_h2.to_csv('../../data/tmp/h2_rename.csv')
-    df_curr.to_csv('../../data/tmp/curr_cols.csv')
     
     # concatenate all three datasets
     df = pd.concat([df_h1,df_h2,df_curr],sort=True)
-    df = _final_alignments(df)
-    df = _drop_extra_columns(df)
     
- 
+    df = _final_alignments(df)
+    
+    df = _drop_extra_columns(df)
+    df.to_csv("../../data/tmp/after_drop_{}.csv".format(final_timespan))
+    
     # event level smoothing
     df = _event_smoothing_prep(df)
     df = _cost_adjustments(df)
+   
     df = _event_forward_fill(df)
     
     df = _event_smoothing_pass(df)
@@ -920,20 +817,27 @@ def create_final_datasets():
     # save merged/cleaned versions
     df.to_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan))
     
-    wfdf = df.loc[df.INCTYP_ABBREVIATION.isin(['WF','WFU','RX'])]
+    df = pd.read_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan),low_memory=False)
+    wfdf = df.loc[df.INCTYP_ABBREVIATION.isin(['WF','WFU','RX','CX'])]
     wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE'])
     
     wfdf = _calculate_fire_statistics(wfdf)
     wfdf.to_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan))
-    
+    print("statistics caculated.")
     
     #wfdf = pd.read_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan),low_memory=False)
-   
+    #wfdf = wfdf.loc[:, ~wfdf.columns.str.contains('^Unnamed')]
     # create the incident level summary
     inc_df = _create_incident_summary(wfdf)
+    inc_df.to_csv('../../data/tmp/create-incident-summary-out.csv')
     
-    inc_df = _join_with_fod_database(inc_df)
-    inc_df.to_csv('../../data/out/ics209-plus-wf_incidents_{}.csv'.format(final_timespan))
     
-   
+    inc_df = pd.read_csv('../../data/tmp/create-incident-summary-out.csv',low_memory=False)
+    '''
+    inc_df = inc_df.loc[:, ~inc_df.columns.str.contains('^Unnamed')]
+    inc_fod, cpx_fod = _join_with_fod_database(inc_df)
+    inc_fod.to_csv('../../data/out/ics209-plus-wf_incidents_{}.csv'.format(final_timespan))
+    cpx_fod.to_csv('../../data/out/ics209-plus-wf_complex_associations_{}.csv'.format(final_timespan))
+    '''
 
+    

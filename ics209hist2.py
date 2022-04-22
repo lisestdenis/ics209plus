@@ -1,8 +1,12 @@
+import os
 import ics209util
 import pandas as pd
 import numpy as np
+import earthpy as et
 
 hist_timespan = '2001to2013'
+data_dir = os.path.join(et.io.HOME, 'data')
+out_dir = os.path.join(data_dir, 'out')
 
 def _split_duplicate_incident_numbers(df):
     df['SEQ_NUM'] = "1"
@@ -238,7 +242,8 @@ def _standardized_fields(df):
         11.0:'Light Logging Slash',12.0:'Medium Logging Slash',13.0:'Heavy Logging Slash'}
     df['FUEL_MODEL'] = df['PRIMARY_FUEL_MODEL'].map(fmmap)
     
-    st_df = pd.read_csv('../../data/out/COMMONDATA_STATES_2014.csv')
+    st_df = pd.read_csv(os.path.join(out_dir,
+                                     'COMMONDATA_STATES_2014.csv'))
     st_lu = st_df[['STATE','STATE_NAME']]
     st_lu = st_lu.dropna(axis=0,how='any')
     st_lu.columns = ['UN_USTATE','POO_STATE_NAME']
@@ -251,9 +256,13 @@ def _ks_merge_purge_duplicates(df):
     df['HOUR'] = df['HOUR'].fillna(0.0)
     df['HOUR'] = df['HOUR'].astype(int)
     df = df.drop_duplicates()
-    df.to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv'.format(hist_timespan))
+    df.to_csv(os.path.join(out_dir,
+                           "IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv".format(hist_timespan)))
     
-    df_short = pd.read_excel('../../data/raw/excel/Short1999to2013v2.xlsx')
+    df_short = pd.read_excel(os.path.join(data_dir,
+                                          'raw',
+                                          'excel',
+                                          'Short1999to2013v2.xlsx'))
     df_short['INCIDENT_NAME'] = df_short['INCIDENT_NAME'].astype(str)
     df_short['INCIDENT_NUMBER'] = df_short['INCIDENT_NUMBER'].astype(str)
     df_short = df_short.drop_duplicates()
@@ -262,16 +271,18 @@ def _ks_merge_purge_duplicates(df):
     df_short['HOUR'] = df_short['HOUR'].astype(int)
     df_short['REPORT_DATE'] = pd.to_datetime(df_short.REPORT_DATE)
     short_cols = df_short[['REPORT_DATE','HOUR','INCIDENT_NUMBER','INCIDENT_ID_KS','KS_COMPLEX_NAME',
-                           'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED','START_DATE_CORRECTED']]
+                           'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED','START_DATE_CORRECTED']].copy()
     short_cols.columns = ['REPORT_DATE','HOUR','INCIDENT_NUMBER','INCIDENT_ID','COMPLEX_NAME',
                            'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED','START_DATE_CORRECTED']
+    short_cols['INCIDENT_ID'] = short_cols.INCIDENT_ID.astype(str).str.strip().str.upper()
     
     # merge
     df = pd.merge(df, short_cols, on=['INCIDENT_NUMBER','REPORT_DATE','HOUR'], how='left')
     
     # Save file with deleted records:
     df_notinKS = df.loc[df.INCIDENT_ID.isnull() & df.TYPE_INC.isin(['WF','WFU'])]
-    df_notinKS.to_csv('../../data/out/ics209_sitreps_deleted_hist2_{}.csv'.format(hist_timespan))
+    df_notinKS.to_csv(os.path.join(out_dir,
+                                   "ics209_sitreps_deleted_hist2_{}.csv".format(hist_timespan)))
     # Save file merged with KS records as cleanedKS version
     df = df.loc[~df.INCIDENT_ID.isnull() | ~df.TYPE_INC.isin(['WF','WFU'])]
     df.loc[~df.TYPE_INC.isin(['WF','WFU']),'INCIDENT_ID'] = df.START_YEAR.astype(int).astype(str) + '_' \
@@ -284,7 +295,10 @@ def _ks_merge_purge_duplicates(df):
     return df
 
 def _latitude_longitude_updates(df):
-    hist_loc = pd.read_csv('../../data/raw/latlong_clean/historical_cleaned_ll-fod.csv')
+    hist_loc = pd.read_csv(os.path.join(data_dir,
+                                        'raw',
+                                        'latlong_clean',
+                                        'historical_cleaned_ll-fod.csv'))
     hist_loc = hist_loc.loc[:, 'FIRE_EVENT_ID':'LL_CONFIDENCE']
     df = df.merge(hist_loc, on=['FIRE_EVENT_ID'],how='left')
     # Set the Update Flag
@@ -331,7 +345,8 @@ def _latitude_longitude_updates(df):
 
 def _get_str_ext(dfh_xref):
     # read in structures table
-    dfh_str = pd.read_csv('../../data/out/IMSR_IMSR_209_INCIDENT_STRUCTURES_{}.csv'.format(hist_timespan))
+    dfh_str = pd.read_csv(os.path.join(out_dir,
+                                       "IMSR_IMSR_209_INCIDENT_STRUCTURES_{}.csv".format(hist_timespan)))
     dfh_str = dfh_str.loc[:, ~dfh_str.columns.str.contains('^Unnamed')]
     
     #Fix misc incident number issues
@@ -391,7 +406,8 @@ def _get_str_ext(dfh_xref):
     dfh_str_piv['STR_THREATENED'] = dfh_str_piv.THREATENED_COMM + dfh_str_piv.THREATENED_OUTB + dfh_str_piv.THREATENED_PRIM
     
     # Save output files
-    dfh_str_piv.to_csv('../../data/out/IMSR_IMSR_209_INCIDENT_STRUCTURES_{}_UIDpivot_cln.csv'.format(hist_timespan))
+    dfh_str_piv.to_csv(os.path.join(out_dir,
+                                    "IMSR_IMSR_209_INCIDENT_STRUCTURES_{}_UIDpivot_cln.csv".format(hist_timespan)))
     dfh_merge = dfh_str_piv[['INCIDENT_ID','REPORT_TO_DATE','STR_DAMAGED','STR_DESTROYED','STR_THREATENED',\
                             'DAMAGED_PRIM','DESTROYED_PRIM','THREATENED_PRIM','DAMAGED_COMM','DESTROYED_COMM','THREATENED_COMM']]
     # Rename the columns for merge
@@ -404,7 +420,8 @@ def _get_str_ext(dfh_xref):
     return dfh_merge 
         
 def _get_res_ext(uid_xref):
-    dfh_res = pd.read_csv('../../data/out/IMSR_IMSR_209_INCIDENT_RESOURCES_{}.csv'.format(hist_timespan))
+    dfh_res = pd.read_csv(os.path.join(out_dir,
+                                       "IMSR_IMSR_209_INCIDENT_RESOURCES_{}.csv".format(hist_timespan)))
     dfh_res = dfh_res.loc[:, ~dfh_res.columns.str.contains('^Unnamed')]
     
     # compute total aerial
@@ -475,8 +492,11 @@ def _get_res_ext(uid_xref):
     return dfh_res_ext
     
 def historical2_merge_prep():
-    df = pd.read_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}.csv'.format(hist_timespan),low_memory=False)
-    df_lu = pd.read_csv('../../data/out/IMSR_LOOKUPS.csv')
+    df = pd.read_csv(os.path.join(out_dir,
+                                  "IMSR_IMSR_209_INCIDENTS_{}.csv".format(hist_timespan)),
+                     low_memory=False)
+    df_lu = pd.read_csv(os.path.join(out_dir,
+                                     'IMSR_LOOKUPS.csv'))
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     df = _clean_and_format_date_and_time_fields(df)
     df = _split_duplicate_incident_numbers(df)
@@ -496,5 +516,6 @@ def historical2_merge_prep():
     df_res_ext = _get_res_ext(dfIDxref)
     df_ext = pd.merge(df_ext,df_res_ext,on=['INCIDENT_ID','REPORT_TO_DATE'],how='left')
     print("Historical System 2 Merge preparation complete. {}".format(df_ext.shape))
-    df_ext.to_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv'.format(hist_timespan))
+    df_ext.to_csv(os.path.join(out_dir,
+                               "IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv".format(hist_timespan)))
     
