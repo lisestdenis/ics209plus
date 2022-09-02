@@ -26,6 +26,9 @@ curr_cslty_data = []
 curr_life_safety_data = []
 curr_strategy_data = []
 curr_lookup_data = []
+curr_cpx_assoc = []
+nwcg_unit_list = []
+nwcg_agency_list = []
 
 data_dir = os.path.join(et.io.HOME, 'data')
 excel = ".xlsx"
@@ -95,6 +98,25 @@ def get_annual_lookup_file(year):
     
     return(df)
 
+def get_commondata_nwcg(year):
+    # Really low prot unit percentages in 2018 (3.5%) and 2019 (8.4%)
+    if year in [2014, 2015, 2018, 2019]:
+        unit_fname = "COMMONDATA_NWCG_UNITS.csv"
+        agency_fname = "COMMONDATA_NWCG_AGENCIES.csv"
+        enc='utf-8'
+    else:
+        unit_fname = "COMMONDATA_HISTORY_NWCG_UNITS.csv"
+        agency_fname = "COMMONDATA_HISTORY_NWCG_AGENCIES.csv"
+        enc='latin1'
+    unit_path = os.path.join(data_dir, 'raw', 'excel', str(year), unit_fname)
+    agency_path = os.path.join(data_dir, 'raw', 'excel', str(year), agency_fname)
+    unit_df = pd.read_csv(unit_path,encoding=enc)
+    #print(unit_df.shape)
+    agency_df = pd.read_csv(agency_path)
+    
+    return unit_df,agency_df
+    
+
 def concatenate_annual_files():
     """ concatenate_annual_files: processes each year of ics209 data and consolidates excel files into single dataframes
     
@@ -136,7 +158,13 @@ def concatenate_annual_files():
             curr_cslty_data.append(get_annual_famweb_datafile(year,'_209_CSLTY_ILLNESSES'))
             curr_life_safety_data.append(get_annual_famweb_datafile(year,'_209_LIFE_SAFETY_MGMTS'))
             curr_strategy_data.append(get_annual_famweb_datafile(year,'_209_STRATEGIES'))
+            curr_cpx_assoc.append(get_annual_famweb_datafile(year,'_COMPLEX_ASSOCS'))
             curr_lookup_data.append(get_annual_lookup_file(year))
+            if year != 2016: 
+                units, agencies = get_commondata_nwcg(year)
+                nwcg_unit_list.append(units)
+                nwcg_agency_list.append(agencies)
+                
             
     # concatenate individual files and save to csv
     out_dir = os.path.join(data_dir,'out')
@@ -171,19 +199,22 @@ def concatenate_annual_files():
                                             "SIT209_HISTORY_INCIDENT_209_AFFECTED_STRUCTS_{}.csv".format(curr_timespan)))
     pd.concat(curr_cslty_data,sort=True).to_csv(os.path.join(out_dir,
                                                     "SIT209_HISTORY_INCIDENT_209_CSLTY_ILLNESSES_{}.csv".format(curr_timespan)))
-    pd.concat(curr_life_safety_data,sort=True).to_csv(os.path.join(out_dir,
-                                                    "SIT209_HISTORY_INCIDENT_209_LIFE_SAFETY_MGMTS_{}.csv".format(curr_timespan)))
+    pd.concat(curr_life_safety_data,sort=True).to_csv(os.path.join(out_dir, 
+                                                    "SIT209_HISTORY_INCIDENT_209_LIFE_SAFETY_MGMTS_{}.csv".format(curr_timespan)))                                                 
     pd.concat(curr_strategy_data,sort=True).to_csv(os.path.join(out_dir,
                                                         "SIT209_HISTORY_INCIDENT_209_STRATEGIES_{}.csv".format(curr_timespan)))
+    pd.concat(curr_cpx_assoc).to_csv(os.path.join(out_dir,
+                                                  "SIT209_HISTORY_INCIDENT_COMPLEX_ASSOCS_{}.csv".format(curr_timespan)))                    
     pd.concat(curr_lookup_data,sort=True).to_csv(os.path.join(out_dir,
                                                               "SIT209_LOOKUP_CODES.csv"))
-    # Common data for the current system
-    common_data = ["COMMONDATA_NWCG_AGENCIES","COMMONDATA_NWCG_UNITS","COMMONDATA_STATES"]
-    for d in common_data:
-        xlPath = os.path.join(data_dir, 'raw', 'excel', '2014', "{}.xlsx".format(d))
-        xl = pd.ExcelFile(xlPath)
-        df = xl.parse(0)
-        df.to_csv(os.path.join(out_dir, "{}_2014.csv".format(d)))
+    pd.concat(nwcg_unit_list).to_csv(os.path.join(out_dir,'COMMONDATA_NWCG_UNITS_{}.csv'.format(curr_timespan)))
+    pd.concat(nwcg_agency_list).to_csv(os.path.join(out_dir,'COMMONDATA_NWCG_AGENCIES_{}.csv'.format(curr_timespan)))
+    
+    # State data
+    xlPath = os.path.join(data_dir, 'raw', 'excel', '2014', "COMMONDATA_STATES.xlsx")
+    xl = pd.ExcelFile(xlPath)
+    df = xl.parse(0)
+    df.to_csv(os.path.join(out_dir, "COMMONDATA_DATA_STATES.csv"))
     
                                                                                    
 

@@ -3,6 +3,7 @@ import numpy as np
 import datetime as dt
 import ics209util
 import earthpy as et
+import os
 
 lgcy_timespan = '1999to2002'
 hist_timespan = '2001to2013'
@@ -10,8 +11,16 @@ curr_timespan = '2014to2020'
 final_timespan = '1999to2020'
 allhist_timespan = '1999to2013'
 
+data_dir = os.path.join(et.io.HOME, 'data')
+out_dir = os.path.join(data_dir, 'out')
+tmp_dir = os.path.join(data_dir,'tmp')
+fod_dir = os.path.join(data_dir,'raw','excel','fod')
+cpx_dir = os.path.join(data_dir,'raw','cpx_assocs')
+fired_dir = os.path.join(data_dir,'raw','inc_fired')
+latlon_dir = os.path.join(data_dir,'raw','latlong_clean')
+
 #fod_version = '20210104'
-fod_version = '20210504'
+fod_version = '20220819'
 cpx_version= '20190815'
 
 def _historical1_rename_columns(df_h1):
@@ -94,7 +103,7 @@ def _final_alignments(df):
     return df
 
 def _drop_extra_columns(df):
-    df = df.drop(['ACTIVE','APPROVED_BY','APPROVED_DATE',\
+    df = df.drop(['ACTIVE','ADDNTL_FUEL_MODEL_IDENTIFIER','APPROVED_BY','APPROVED_DATE',\
                  'AREA_MEASUREMENT','CAUSE_IDENTIFIER','COMMUNITIES_THREATENED_12',\
                  'COMMUNITIES_THREATENED_24','COMMUNITIES_THREATENED_48','COMMUNITIES_THREATENED_72',\
                  'COMPLEXITY_LEVEL_IDENTIFIER','CONTROLLED_DATE','CREATED_BY','CREATED_DATE',\
@@ -103,12 +112,14 @@ def _drop_extra_columns(df):
                  'CURRENT_THREAT_12','CURRENT_THREAT_24','CURRENT_THREAT_48','CURRENT_THREAT_72',\
                  'CURRENT_THREAT_GT72','CURR_INC_AREA_UOM_IDENTIFIER','DATA_ENTRY_STATUS',\
                  'DONWCGU_PROT_UNIT_IDENTIFIER','DOU_IDENTIFIER','EST_CONTROL','FUEL_MODEL_IDENTIFIER',\
+                 'FIRE_BEHAVIOR_1_IDENTIFIER','FIRE_BEHAVIOR_2_IDENTIFIER','FIRE_BEHAVIOR_3_IDENTIFIER',\
                  'GACC_OBS_FIRE_BEHAVE','GACC_PLANNED_ACTIONS','GACC_REMARKS','GACC_SIGNIF_EVENTS_SUMMARY',\
+                 'GEN_FIRE_BEHAVIOR_IDENTIFIER','ID',\
                  'HOUR','INC_MGMT_ORG_IDENTIFIER','INC_MGMT_ORG_ABBREV','ITYPE','LAST_MODIFIED_BY',\
                  'LAST_MODIFIED_DATE','LATDEG','LATMIN','LONGDEG','LONGMIN','LINE_MEASUREMENT',\
                  'LINE_TO_BUILD','LINE_TO_BUILD_NUM','LOCAL_TIMEZONE_IDENTIFIER','MANAGEMENT_CODE',\
                  'NEWACRES','NO_EVACUATION','NO_LIKELY','OWNERSHIP_STATE','OWNERSHIP_STATE','OWNERSHIP_UNITID',\
-                 'PCT_CONT_COMPL_UOM_IDENTIFIER','PERCENT_MMA',\
+                 'PCT_CONT_COMPL_UOM_IDENTIFIER','PERCENT_MMA','POO_DONWCGU_OWN_IDENTIFIER','POO_LD_PM_IDENTIFIER',\
                  'INCTYP_IDENTIFIER','PREPARED_BY','PREPARED_DATE','FOD_LATITUDE','FOD_LONGITUDE',\
                  'PRIMARY_FUEL_MODEL','PROJECTED_ACTIVITY_12','PROJECTED_ACTIVITY_24','PROJECTED_ACTIVITY_48',\
                  'PROJECTED_ACTIVITY_72','PROJECTED_ACTIVITY_GT72','PROJECTED_MOVEMENT','PROJECTED_MOVEMENT24',\
@@ -117,7 +128,7 @@ def _drop_extra_columns(df):
                  'STRATEGIC_OBJECTIVES','SUBMITTED_DATE','SUBMITTED_TO','C_RH','C_TEMP','C_WIND_SPEED',\
                  'C_WIND_DIRECTION','F_RH','F_TEMP','F_WIND_SPEED','F_WIND_DIRECTION',\
                  'WFIP_STAGE','lat_c','long_c','TYPE_INC','DISCOVERY_DATE_CORRECTED', 'FIRE_INCIDENT_NUMBER',\
-                  'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED'
+                  'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED','SECNDRY_FUEL_MODEL_IDENTIFIER'
                  ],axis=1)
  
     return df
@@ -500,23 +511,27 @@ def _calculate_fire_statistics(df):
         
     return df
 
+
 def _create_incident_summary(wfdf):
+    
+    # Get first row of incident for key initial values
     wfinc_1st = wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby(['INCIDENT_ID']).first()
                                                                             
+    # Get last row for final report values
     wfinc_df = wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby('INCIDENT_ID').nth(-1)
     wfinc_df = wfinc_df.reset_index()
-    print(wfinc_df.loc[wfinc_df.INC_IDENTIFIER == 4379626])
     
-    # take a subset of columns
+    # take a subset of columns from final values
     wfincdf = wfinc_df[['INCIDENT_ID','INCIDENT_NUMBER','INCIDENT_NAME','INCTYP_ABBREVIATION',\
                     'ACRES','CAUSE','COMPLEX','DISCOVERY_DATE','DISCOVERY_DOY','EXPECTED_CONTAINMENT_DATE',
                     'FATALITIES','FUEL_MODEL','INCIDENT_DESCRIPTION','INC_IDENTIFIER','INJURIES_TO_DATE',\
                     'LL_CONFIDENCE','LL_UPDATE','LOCAL_TIMEZONE','POO_CITY','POO_COUNTY','POO_LATITUDE',\
                     'POO_LONGITUDE','POO_SHORT_LOCATION_DESC','POO_STATE','PROJECTED_FINAL_IM_COST','START_YEAR',\
                     'SUPPRESSION_METHOD','STR_DAMAGED','STR_DAMAGED_COMM','STR_DAMAGED_RES','STR_DESTROYED',\
-                    'STR_DESTROYED_COMM','STR_DESTROYED_RES','REPORT_TO_DATE','INCIDENT_ID_OLD']].copy()
+                    'STR_DESTROYED_COMM','STR_DESTROYED_RES','TOTAL_R_FATALITIES','TOTAL_P_FATALITIES',\
+                    'REPORT_TO_DATE','INCIDENT_ID_OLD']].copy()
     
-    # rename columns
+    # rename some of final reported totals
     wfincdf.columns = wfincdf.columns.str.replace('ACRES','FINAL_ACRES')
     wfincdf.columns = wfincdf.columns.str.replace('REPORT_TO_DATE','FINAL_REPORT_DATE')
     wfincdf.columns = wfincdf.columns.str.replace('INJURIES_TO_DATE','INJURIES_TOTAL')
@@ -526,15 +541,17 @@ def _create_incident_summary(wfdf):
     wfincdf.columns = wfincdf.columns.str.replace('STR_DESTROYED','STR_DESTROYED_TOTAL')
     wfincdf.columns = wfincdf.columns.str.replace('STR_DESTROYED_TOTAL_COMM','STR_DESTROYED_COMM_TOTAL')
     wfincdf.columns = wfincdf.columns.str.replace('STR_DESTROYED_TOTAL_RES','STR_DESTROYED_RES_TOTAL')
+    wfincdf.columns = wfincdf.columns.str.replace('TOTAL_R_FATALITIES','FATALITIES_RESPONDER')
+    wfincdf.columns = wfincdf.columns.str.replace('TOTAL_P_FATALITIES','FATALITIES_PUBLIC')
     
-    # calculate #inc mgmt number of sitreps
+    # calculate #inc mgmt number of sitreps and merge into incident summary record
     num_rpts = wfdf.groupby(['INCIDENT_ID']).size().reset_index(name='INC_MGMT_NUM_SITREPS')
     wfincdf = pd.merge(wfincdf,num_rpts,on=['INCIDENT_ID'],how='left')
     
-    # set evacuations flag
-    evac_flag = wfdf.groupby(['INCIDENT_ID']).EVACUATION_IN_PROGRESS.max().reset_index(name='EVACUATION_REPORTED')
-    evac_flag.EVACUATION_REPORTED.value_counts()
-    wfincdf = pd.merge(wfincdf,evac_flag,on=['INCIDENT_ID'],how='left')
+    # calculate maximum evacuations & 
+    # TODO: Set Peak evacuation DOY/Date
+    max_evac = wfdf.groupby(['INCIDENT_ID']).RPT_EVACUATIONS.max().reset_index(name='PEAK_EVACUATIONS')
+    wfincdf = pd.merge(wfincdf,max_evac,on=['INCIDENT_ID'],how='left')
     
     # max structures threatened
     str_thr = wfdf.groupby(['INCIDENT_ID']).STR_THREATENED.max().reset_index(name='STR_THREATENED_MAX')
@@ -601,7 +618,54 @@ def _create_incident_summary(wfdf):
     wfincdf['WF_MAX_GROWTH_DOY'] = wfincdf.WF_MAX_GROWTH_DATE.dt.dayofyear
     wfincdf['WF_GROWTH_DURATION'] = wfincdf.WF_CESSATION_DOY - wfincdf.DISCOVERY_DOY
     
+    # Suppression Method Values
+    supm_df = wfdf[['INCIDENT_ID','REPORT_TO_DATE','SUPPRESSION_METHOD']].copy()
+    supm_df.sort_values(by=['INCIDENT_ID','REPORT_TO_DATE'], inplace=True)
+    
+    # Create aggregated values   
+    supm_df['SUP_COUNT'] = 0
+    # Suppression Series and Series Length
+    s_agg1 = supm_df.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby('INCIDENT_ID', 
+                                                               as_index=False).agg({
+                                                            'SUP_COUNT': 'count',
+                                                            'SUPPRESSION_METHOD': lambda x: list(x),
+                                                                }).rename(columns={
+                                                            'SUP_COUNT':'SUP_SERIES_LEN',
+                                                            'SUPPRESSION_METHOD':'SUP_SERIES',
+                                                                })
+    # Initial Suppression Method
+    s_agg2 = supm_df.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby('INCIDENT_ID', 
+                                                               as_index=False).agg({
+                                                            'SUPPRESSION_METHOD': lambda x: list(x)[0],
+                                                                }).rename(columns={
+                                                            'SUPPRESSION_METHOD': 'SUP_METHOD_INITIAL',
+                                                                })
+    # Final Suppression Method
+    s_agg3 = supm_df.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby('INCIDENT_ID', 
+                                                               as_index=False).agg({
+                                                            'SUPPRESSION_METHOD': lambda x: list(x)[-1],
+                                                                }).rename(columns={
+                                                            'SUPPRESSION_METHOD': 'SUP_METHOD_FINAL',
+                                                                })
+    # Count in Full Suppression
+    s_agg4 = supm_df.sort_values(['INCIDENT_ID','REPORT_TO_DATE']).groupby('INCIDENT_ID', 
+                                                               as_index=False).agg({
+                                                            'SUPPRESSION_METHOD': lambda x: str(x).count('FS')
+                                                                }).rename(columns={
+                                                            'SUPPRESSION_METHOD': 'SUP_DAYS_FS',
+                                                                })
+    # Merge aggregations together
+    sup_agg = s_agg1.merge(s_agg2, how='left')
+    sup_agg = sup_agg.merge(s_agg3, how = 'left')
+    sup_agg = sup_agg.merge(s_agg4, how = 'left')
+    # Calculate Percent Full Suppression
+    sup_agg['SUP_PERCENT_FS'] = sup_agg.SUP_DAYS_FS / sup_agg.SUP_SERIES_LEN * 100
+    sup_agg.drop(['SUP_SERIES_LEN','SUP_DAYS_FS'],axis=1,inplace=True)
+    # Merge with inc_df
+    wfincdf = pd.merge(wfincdf,sup_agg,on=['INCIDENT_ID'],how='left')
+    
     return wfincdf
+
 
 def _create_complex_associations():
    
@@ -637,57 +701,86 @@ def get_largest_fod_fire(fod_fire_list):
     max_row = df.loc[df.SIZE == df.SIZE.max()]
     return max_row
 
-def _fod_merge(fod_agg, df):
+def _fod_merge(fod_agg, inc_df):
     
     # Join fod_agg with incident data
-    print("Before merge...")
-    df = df.merge(fod_agg, on="INCIDENT_ID", how='left')
-    df.to_csv('../../data/tmp/fod-agg-merge-out.csv')
+    #fod_agg.rename(columns={"FODJ_INCIDENT_ID": "INCIDENT_ID"}, inplace=True)
+    inc_df = inc_df.merge(fod_agg, on="FODJ_INCIDENT_ID", how='left')
+    inc_df.to_csv(os.path.join(tmp_dir,'fod-agg-merge-out.csv'))
     
-    merge_col = "INCIDENT_ID"
+    merge_col = "FODJ_INCIDENT_ID"
      
      # Multiple fires case:
-    fod_fires = df.loc[df.FOD_FIRE_NUM>=1].copy()
-    fod_fires = fod_fires[['INCIDENT_ID','FOD_FIRE_LIST']]
+    fod_fires = inc_df.loc[inc_df.FOD_FIRE_NUM>=1].copy()
+    fod_fires = fod_fires[['FODJ_INCIDENT_ID','FOD_FIRE_LIST']]
+    fod_fires.to_csv(os.path.join(tmp_dir,'fod-fires.csv'))
     
+    return inc_df
     
+    '''
     for i in range(0,fod_fires.shape[0]):
     #for i in range(0,4):
         max_row = get_largest_fod_fire(fod_fires.iloc[i].FOD_FIRE_LIST)
-        df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FOD_ID'] = max_row.iloc[0]['ID']
+        inc_df.loc[inc_df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FOD_ID'] = max_row.iloc[0]['ID']
         if 'COORDS' in max_row.columns:
-            df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FIRE_LATITUDE'] = max_row.iloc[0]['COORDS'][0]
-            df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FIRE_LONGITUDE'] = max_row.iloc[0]['COORDS'][1]
+            inc_df.loc[inc_df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FOD_LATITUDE'] = max_row.iloc[0]['COORDS'][0]
+            inc_df.loc[inc_df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_FOD_LONGITUDE'] = max_row.iloc[0]['COORDS'][1]
         if 'MTBS_ID' in max_row.columns:
-            df.loc[df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_MTBS_FIRE_INFO'] = max_row.iloc[0]['MTBS_ID']
-    df['LRGST_FIRE_COORDS'] = df[['LRGST_FIRE_LATITUDE', 'LRGST_FIRE_LONGITUDE']].apply(tuple, axis=1)
+            inc_df.loc[inc_df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_MTBS_FIRE_INFO'] = max_row.iloc[0]['MTBS_ID']
+    inc_df['LRGST_FOD_COORDS'] = inc_df[['LRGST_FOD_LATITUDE', 'LRGST_FOD_LONGITUDE']].apply(tuple, axis=1)
     
-    fod_fires.to_csv('../../data/tmp/fod-fire-data.csv')
+    fod_fires.to_csv(os.path.join(tmp_dir,'fod-fire-data.csv'))
+    '''
     
-    return df
+    return inc_df
+
+def set_fod_join_id(inc_df,fod_df,cpx_df):
+    inc_df = inc_df.copy()
+    
+    mbr_dict = dict(zip(cpx_df.MEMBER_INCIDENT_ID.tolist(),cpx_df.FODJ_INCIDENT_ID.tolist()))
+    
+    incj_ids = fod_df['ICS_209_PLUS_INCIDENT_JOIN_ID'].to_list()
+    cpxj_ids = fod_df['ICS_209_PLUS_COMPLEX_JOIN_ID'].to_list()
+    mbrj_ids = cpx_df['MEMBER_INCIDENT_ID'].to_list()
+    
+    inc_df['inc_join'] = False
+    inc_df['cpx_join'] = False
+    inc_df['mbr_join'] = False
+    inc_df['FODJ_INCIDENT_ID'] = ""
+    # Case #1 Incident join found
+    inc_df.loc[inc_df.INCIDENT_ID.isin(incj_ids),'inc_join'] = True
+    inc_df.loc[inc_df.INCIDENT_ID.isin(incj_ids),'FODJ_INCIDENT_ID'] = inc_df.INCIDENT_ID
+    
+    # Case #2 Cpx join found
+    inc_df.loc[~inc_df.inc_join & inc_df.INCIDENT_ID.isin(cpxj_ids),'cpx_join'] = True
+    inc_df.loc[~inc_df.inc_join & inc_df.INCIDENT_ID.isin(cpxj_ids),'FODJ_INCIDENT_ID'] = inc_df.INCIDENT_ID
+    
+    # Case #3
+    inc_df.loc[~inc_df.inc_join & ~inc_df.cpx_join & inc_df.INCIDENT_ID.isin(mbrj_ids), 'mbr_join'] = True
+    inc_df.loc[inc_df.mbr_join,'FODJ_INCIDENT_ID'] = inc_df['INCIDENT_ID'].map(mbr_dict)
+    
+    return inc_df
 
 
-def _fod_aggregation(inc_df, cpx_df):
+def fod_aggregation(inc_df,cpx_df):
     print("Aggregating fod...")
+    # Read FOD join dataset and prep
+    fod_df = pd.read_csv(os.path.join(fod_dir,'FOD_JOIN_{}ics.csv'.format(fod_version)), 
+                                      low_memory=False)
     
-    # Read FOD join dataset & fill in missing incident IDs (2014+)
-    fod_df = pd.read_csv('../../data/raw/excel/fod/FOD_JOIN_{}ics.csv'.format(fod_version), low_memory=False)
-    fod_df = fod_df.loc[:, ~fod_df.columns.str.contains('^Unnamed')]
+    inc_df = set_fod_join_id(inc_df,fod_df,cpx_df)
+    cpx_df = cpx_df.copy()
+    
+    # Temp workaround for join issue
+    fod_df['FODJ_INCIDENT_ID'] = fod_df.ICS_209_PLUS_INCIDENT_JOIN_ID
     fod_df = fod_df.loc[~fod_df.FODJ_INCIDENT_ID.isnull()]
     fod_df['FODJ_INCIDENT_ID'] = fod_df.FODJ_INCIDENT_ID.astype(str).str.strip().str.upper()
-    print(fod_df.loc[fod_df.FODJ_INCIDENT_ID == "2015_2768749_KWETHLUK RIVER # 2"])
     
     # pare down FOD columns
     fod_cols = fod_df[['FOD_ID','MTBS_ID','MTBS_FIRE_NAME','NWCG_GENERAL_CAUSE',
                        'FIRE_SIZE','LATITUDE','LONGITUDE',
-                       'DISCOVERY_DOY','CONT_DOY','ICS_209_PLUS_INCIDENT_JOIN_ID','ICS_COMPLEX_NAME',
-                       'FIRE_NAME_LINK','MEMBER_INC_IDENTIFIER','CPLX_INC_IDENTIFIER','CPLX_INCIDENT_ID',
-                       'INCIDENT_ID','FODJ_INCIDENT_ID']].copy()
-    
-    
-    fod_cols.loc[fod_cols.ICS_209_PLUS_INCIDENT_JOIN_ID == "2003_ND-SRA-248_TWENTY FOUR", 'MTBS_FIRE_NAME'] = "TWENTY FOUR"
-    print(fod_cols.shape)
-    fod_cols.to_csv('../../data/tmp/fod-cols.csv')
+                       'DISCOVERY_DOY','CONT_DOY','ICS_209_PLUS_INCIDENT_JOIN_ID',
+                       'FODJ_INCIDENT_ID']].copy()
     
     # create FOD Coordinates
     fod_cols['FOD_COORD_LIST'] = list(zip(fod_cols.LATITUDE,fod_cols.LONGITUDE))
@@ -738,29 +831,36 @@ def _fod_aggregation(inc_df, cpx_df):
                                             'FOD_COORD_LIST' : 'FOD_COORD_LIST',
                                             })
     
+    
     #'FOD_STR' : lambda x: "[%s]" % ', '.join(x.astype(str)),
     fod_agg['FOD_CAUSE'] = fod_agg.FOD_CAUSE.apply(lambda x: pd.unique(x))
     fod_agg['FOD_CAUSE_NUM'] = fod_agg.FOD_CAUSE.apply(lambda x: len(x))
-    fod_agg['FOD_COORD_LIST'] = fod_agg.FOD_COORD_LIST.apply(lambda x: pd.unique(x))
+    fod_agg['FOD_COORD_LIST'] = fod_agg.FOD_COORD_LIST.apply(lambda x: pd.unique(x).tolist())
     fod_agg['FOD_COORD_NUM'] = fod_agg['FOD_COORD_LIST'].apply(lambda x: len(x))
-    fod_agg['MTBS_FIRE_LIST'] = fod_agg.MTBS_FIRE_LIST.apply(lambda x: pd.unique(x))
+    fod_agg['MTBS_FIRE_LIST'] = fod_agg.MTBS_FIRE_LIST.apply(lambda x: pd.unique(x).tolist())
     fod_agg['MTBS_FIRE_NUM'] = fod_agg.MTBS_FIRE_LIST.apply(lambda x: len(x))
     fod_agg.loc[fod_agg.MTBS_FIRE_NUM == 0, 'MTBS_FIRE_LIST'] = np.nan
-    fod_agg.rename(columns={"FODJ_INCIDENT_ID": "INCIDENT_ID"}, inplace=True)
+    #fod_agg.rename(columns={"FODJ_INCIDENT_ID": "INCIDENT_ID"}, inplace=True)
     
-    fod_agg.to_csv('../../data/tmp/fod-agg-out.csv')
+    fod_agg.to_csv(os.path.join(tmp_dir,'fod-agg-out.csv'))
+    
     
     print("Merging incidents with FOD...")
     inc_fod = _fod_merge(fod_agg, inc_df)
-    inc_fod.to_csv('../../data/tmp/inc-fod-out.csv')
-    print("Merging complexes with FOD...")
-    #cpx_fod = _fod_merge(fod_agg,cpx_df)
+    inc_fod.to_csv(os.path.join(tmp_dir,'inc-fod-out.csv'))
     
-    return inc_fod
+    cpx_agg = fod_agg[['FODJ_INCIDENT_ID', 'FOD_FIRE_LIST', 'MTBS_FIRE_LIST']]
+    cpx_fod = cpx_df.merge(cpx_agg, on='FODJ_INCIDENT_ID', how='left')
+    
+    return inc_fod,cpx_fod
+
+
 
 def _join_with_fod_database(inc_df):
     
-    cpx_df = _create_complex_associations()
+    cpx_df = pd.read_csv(os.path.join(cpx_dir, 'cpx-assocs{}.csv'.format(final_timespan)),
+                         converters = {'FIRE_NAME': str})
+    cpx_df = cpx_df.loc[:, ~cpx_df.columns.str.contains('^Unnamed')]
     
     # Hard-coded fixes for INCIDENT_ID
     inc_df.loc[inc_df.INCIDENT_ID == "2015_2920368_CLEARWATER/MUNICIPAL COMPLEX",'INCIDENT_ID'] = \
@@ -768,19 +868,20 @@ def _join_with_fod_database(inc_df):
     inc_df.loc[inc_df.INC_IDENTIFIER == 2882088,'INCIDENT_ID'] = \
                                                      "2015_2882088_CORNET-WINDY RIDGE"
     
-    #inc_fod, cpx_fod = _fod_aggregation(inc_df,cpx_df)
-    inc_fod = _fod_aggregation(inc_df,cpx_df)
-    #no_fod = inc_df.loc[inc_df.FOD_FIRE_NUM.isnull()]
-    #no_fod = no_fod[['INCIDENT_ID','START_YEAR','FINAL_ACRES']]
-    #no_fod.to_csv('../../data/tmp/no-fod-inc-out.csv')
+    inc_fod, cpx_fod = fod_aggregation(inc_df,cpx_df)    
+    inc_fod.to_csv(os.path.join(tmp_dir,'inc-fod-out.csv'))
+    cpx_fod.to_csv(os.path.join(tmp_dir,'cpx-fod-out.csv'))
     
-    inc_fod.to_csv('../../data/tmp/inc-fod-out.csv')
-    #cpx_fod.to_csv('../../data/tmp/cpx-fod-out.csv')
-    cpx_fod = cpx_df # temporary
-    
-    return inc_fod, cpx_fod
+    return inc_fod,cpx_fod
+
+def _join_with_fired_database(inc_fod):
+    inc_fod = inc_fod.copy()
+    fired_join = pd.read_csv(os.path.join(fired_dir,'ics209plus_fired_attributes_clean2001to2020.csv'))
+    inc_fod = inc_fod.merge(fired_join,on='INCIDENT_ID',how='left')
+    return inc_fod
                      
 def create_final_datasets():
+    
     
     # read cleaned version
     df_h1 = pd.read_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}_cleaned.csv'.format(lgcy_timespan),low_memory=False)
@@ -803,6 +904,7 @@ def create_final_datasets():
     df = _drop_extra_columns(df)
     df.to_csv("../../data/tmp/after_drop_{}.csv".format(final_timespan))
     
+    
     # event level smoothing
     df = _event_smoothing_prep(df)
     df = _cost_adjustments(df)
@@ -817,7 +919,7 @@ def create_final_datasets():
     # save merged/cleaned versions
     df.to_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan))
     
-    df = pd.read_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan),low_memory=False)
+    #df = pd.read_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan),low_memory=False)
     wfdf = df.loc[df.INCTYP_ABBREVIATION.isin(['WF','WFU','RX','CX'])]
     wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE'])
     
@@ -826,18 +928,23 @@ def create_final_datasets():
     print("statistics caculated.")
     
     #wfdf = pd.read_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan),low_memory=False)
-    #wfdf = wfdf.loc[:, ~wfdf.columns.str.contains('^Unnamed')]
+    wfdf = wfdf.loc[:, ~wfdf.columns.str.contains('^Unnamed')]
     # create the incident level summary
+
     inc_df = _create_incident_summary(wfdf)
+    # Save incident temp incident summary
     inc_df.to_csv('../../data/tmp/create-incident-summary-out.csv')
     
     
-    inc_df = pd.read_csv('../../data/tmp/create-incident-summary-out.csv',low_memory=False)
-    '''
-    inc_df = inc_df.loc[:, ~inc_df.columns.str.contains('^Unnamed')]
-    inc_fod, cpx_fod = _join_with_fod_database(inc_df)
-    inc_fod.to_csv('../../data/out/ics209-plus-wf_incidents_{}.csv'.format(final_timespan))
+    #inc_df = pd.read_csv('../../data/tmp/create-incident-summary-out.csv',low_memory=False)
+    #inc_df = inc_df.loc[:, ~inc_df.columns.str.contains('^Unnamed')]
+    inc_fod,cpx_fod = _join_with_fod_database(inc_df)
+    inc_fired = _join_with_fired_database(inc_fod)
+    inc_fired.to_csv('../../data/out/ics209-plus-wf_incidents_{}.csv'.format(final_timespan))
     cpx_fod.to_csv('../../data/out/ics209-plus-wf_complex_associations_{}.csv'.format(final_timespan))
-    '''
+    #cpx_fod.to_csv('../../data/out/ics209-plus-wf_complex_associations_{}.csv'.format(final_timespan))
+
+
+    
 
     

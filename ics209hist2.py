@@ -299,14 +299,16 @@ def _latitude_longitude_updates(df):
                                         'raw',
                                         'latlong_clean',
                                         'historical_cleaned_ll-fod.csv'))
-    hist_loc = hist_loc.loc[:, 'FIRE_EVENT_ID':'LL_CONFIDENCE']
     df = df.merge(hist_loc, on=['FIRE_EVENT_ID'],how='left')
     # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
-    # Case #1: Update lat/long
+    # Case #1: Update lat/long using estimate
     df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'LATITUDE'] = df.lat_c # set latitude to nan
     df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'LONGITUDE'] = df.long_c # set longitude to nan
-    # Case #2: Unable to fix so set to null
+    # Case #2: FOD Update available
+    df.loc[df.FOD_LATITUDE.notnull(),'LATITUDE'] = df.FOD_LATITUDE
+    df.loc[df.FOD_LONGITUDE.notnull(),'LONGITUDE'] = df.FOD_LONGITUDE
+    # Case #3: Unable to fix so set to null
     df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LATITUDE'] = np.nan # set latitude to nan
     df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LONGITUDE'] = np.nan # set longitude to nan
     df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LL_CONFIDENCE'] = 'N'

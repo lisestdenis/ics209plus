@@ -299,7 +299,7 @@ def get_largest_fod_rec(fod_list):
     return lrg_ptr
 
 def print_report_block(block_text,*args,**kwargs):
-"""
+    """
     print_report_block prints reporting block with text, optional date (using rpt_date keyword argument) and
     incident identifier (using id keyword argument)
     
@@ -307,7 +307,7 @@ def print_report_block(block_text,*args,**kwargs):
         block_text: text description to be centered in report block
 
     Returns: none
-"""
+    """
     if 'rpt_date' in kwargs:
         rpt_date = kwargs.get("rpt_date")
     else:
@@ -324,14 +324,14 @@ def print_report_block(block_text,*args,**kwargs):
     
     
 def print_incident_summary(row):
-"""
+    """
     print_incident_summary prints all of elements in the incident summary record for debugging/analysis purposes
     
     Parameters:
     row: row from incident summary table
     
     Returns: none
-"""
+    """
     
     print_report_block("INCIDENT_SUMMARY",id=row['INCIDENT_ID'].to_string(index=False))
     print("INCIDENT_ID: {}\t\tType: {}  Cause: {}\t#Sitreps: {}".format(
@@ -401,13 +401,13 @@ def print_incident_summary(row):
     print_report_block("INCIDENT_SUMMARY",id=row['INCIDENT_ID'].to_string(index=False))
     
 def print_sitrep(row):
-"""
+    """
     print_sitrep prints all elements of the sitrep wildfire sitreps table for debugging/analysis
     
     Parameters: row from sitrep table
     
     Returns: none
-"""
+    """
     print_report_block("SITUATION REPORT",rpt_date=row.REPORT_TO_DATE)
     
     print("INCIDENT ID: {}\tFireEventID: {}\tDesc:{}".format(row.INCIDENT_ID,
@@ -520,14 +520,14 @@ def print_sitrep(row):
                                                    
             
 def print_sitrep_narrative(row):
-"""
+    """
     print_sitrep_narrative prints all the narrative text fields from the sitrep table for analysis/debugging
     
     Parameters: 
     row - individual row from sitrep table
     
     Returns: none
-"""
+    """
     
     print_report_block("DAILY NARRATIVE")
     print("Planned Actions: {}\n".format(row.PLANNED_ACTIONS))
@@ -551,7 +551,7 @@ def print_sitrep_narrative(row):
     print("Weather Concerns: {}\n".format(row.WEATHER_CONCERNS_NARR))
 
 def print_full_report(inc_df,sit_df,inc_id):
-"""
+    """
     print_full_report loops through the incident summary and related sitreps for a single incident_id 
     printing out all related fields including narrative fields
     
@@ -561,7 +561,7 @@ def print_full_report(inc_df,sit_df,inc_id):
        inc_id: incident id for selected incident
        
     Returns: none 
-"""
+    """
     
     inc_row = inc_df.loc[inc_df.INCIDENT_ID == inc_id]
     print_incident_summary(inc_row)
@@ -571,7 +571,7 @@ def print_full_report(inc_df,sit_df,inc_id):
         print_sitrep_narrative(row)  
         
 def plot_trends_and_impacts(sit_df,inc_id,*args,**kwargs):
-"""
+    """
     plot_trends_and_impacts plots key variables for a given incident over time including:
     * Fire Size (Acres)
     * Daily Growth (FSR)
@@ -587,7 +587,7 @@ def plot_trends_and_impacts(sit_df,inc_id,*args,**kwargs):
         inc_id: incident identifier
         *args
         **kwargs: output = output path for output file 
-"""
+    """
     
     title_text="Analysis for " + inc_id
     outpath = np.nan

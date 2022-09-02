@@ -8,6 +8,7 @@ lgcy_timespan = '1999to2002'
 data_dir = os.path.join(et.io.HOME, 'data')
 out_dir = os.path.join(data_dir, 'out')
 
+
 def _split_duplicate_incident_numbers(df):
     # set to string and set default seq number to 1
     df.EVENT_ID = df.EVENT_ID.apply(str)
@@ -268,14 +269,17 @@ def _latitude_longitude_updates(df):
                                        'raw',
                                        'latlong_clean',
                                        'legacy_cleaned_ll-fod.csv'))
-    leg_loc = leg_loc.loc[:,'FIRE_EVENT_ID':'LL_CONFIDENCE']
     df = df.merge(leg_loc, on=['FIRE_EVENT_ID'],how='left')
     # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
-    # Case #1: Update lat/long
+    
+    # Case #1: Update using estimated lat/long value 
     df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'POO_LATITUDE'] = df.lat_c # set latitude to nan
     df.loc[((df.lat_c.notnull()) & (df.lat_c != 0)),'POO_LONGITUDE'] = df.long_c # set longitude to nan
-    # Case #2: Unable to fix so set to null
+    # Case #2: Update FOD lat/long
+    df.loc[df.FOD_LATITUDE.notnull(), 'POO_LATITUDE'] = df.FOD_LATITUDE
+    df.loc[df.FOD_LONGITUDE.notnull(), 'POO_LONGITUDE'] = df.FOD_LATITUDE
+    # Case #3: Unable to fix so set to null
     df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'POO_LATITUDE'] = np.nan # set latitude to nan
     df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'POO_LONGITUDE'] = np.nan # set longitude to nan
     df.loc[((df.lat_c.notnull()) & (df.lat_c == 0)),'LL_CONFIDENCE'] = 'N'

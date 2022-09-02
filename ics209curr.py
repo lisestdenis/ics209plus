@@ -1,8 +1,51 @@
+import os
 import pandas as pd
 import numpy as np
 import ics209util
+import earthpy as et
 
-curr_timespan = '2014'
+curr_timespan = '2014to2020'
+data_dir = os.path.join(et.io.HOME, 'data')
+out_dir = os.path.join(data_dir, 'out')
+
+def _record_delete_and_merge(df):
+    
+    # make sure REPORT_TO_DATE set to datetime
+    df['REPORT_TO_DATE'] = pd.to_datetime(df.REPORT_TO_DATE, errors='coerce')
+    df = df.copy()
+    
+    # get merge/purge/delete specifications and make a copy
+    df_cln = pd.read_csv(os.path.join(data_dir,
+                                      'raw',
+                                      'inc_clean',
+                                      'ics-inc-cleanup{}.csv'.format(curr_timespan)))
+    df_cln = df_cln[['INC_IDENTIFIER','action','ID']].copy()
+    
+    # filter for delete/merge/purge
+    df_cln = df_cln[df_cln.action.isin(['delete','merge','rptdel'])]
+    
+    # get incident and report deletion lists
+    inc_del_list = df_cln.loc[df_cln.action == 'delete']['INC_IDENTIFIER'].tolist()
+    sit_del_list = df_cln.loc[df_cln.action == 'rptdel']['ID'].astype(int).tolist()
+    
+    # create merge dictionary
+    merge = df_cln.loc[df_cln.action == 'merge'][['INC_IDENTIFIER','ID']].copy()
+    merge_dict = merge.set_index('INC_IDENTIFIER').to_dict()['ID']
+    print(merge_dict)
+    
+    print("Before removing si†reps:")
+    print(df.shape[0])
+    # delete incidents and sitreps
+    df = df.loc[~df.INC_IDENTIFIER.isin(inc_del_list)]
+    df = df.loc[~df.INC209R_IDENTIFIER.isin(sit_del_list)]
+    print("after:")
+    print(df.shape[0])
+    
+    # merge incidents
+    df.loc[df.INC_IDENTIFIER.isin([*merge_dict]),'INC_IDENTIFIER_OLD'] = df.INC_IDENTIFIER
+    df = df.replace({"INC_IDENTIFIER": merge_dict})
+    
+    return df
 
 def _general_field_cleaning(df):
     df = df.drop(df[(df.INC209R_IDENTIFIER == 427117)].index) #Test Complex
@@ -35,6 +78,7 @@ def _clean_and_format_date_and_time_fields(df):
     
     df['CY'] = df.REPORT_FROM_DATE.dt.year
     df['START_YEAR'] = df.DISCOVERY_DATE.dt.year
+    df['END_YEAR'] = df.ANTICIPATED_COMPLETION_DATE.dt.year
     df.loc[df.START_YEAR.isnull(), 'START_YEAR'] = df.CY
     
     return df
@@ -53,7 +97,10 @@ def _standardized_field_cleaning(df,lu_df):
     fm_lu = fm_rows[['LUCODES_IDENTIFIER','CODE_NAME']]
     fm_lu.columns = ['FUEL_MODEL_IDENTIFIER','FUEL_MODEL']
     df = df.merge(fm_lu, how='left')
-    print(df.shape)
+    fm_lu.columns = ['ADDNTL_FUEL_MODEL_IDENTIFIER','ADDNTL_FUEL_MODEL']
+    df = df.merge(fm_lu, how='left')
+    fm_lu.columns = ['SECNDRY_FUEL_MODEL_IDENTIFIER','SECNDRY_FUEL_MODEL']
+    df = df.merge(fm_lu, how='left')
     
     # AREA MEASUREMENTS & Conversion to Acres:
     area_uom_rows = lu_df[lu_df.CODE_TYPE == 'AREA_UOM']
@@ -95,7 +142,8 @@ def _standardized_field_cleaning(df,lu_df):
     print(df.shape)
     
     # state code/state name
-    st_df = pd.read_csv('../../data/out/COMMONDATA_STATES_2014.csv')
+    st_df = pd.read_csv(os.path.join(out_dir,
+                                     'COMMONDATA_STATES_2014.csv'))
     st_df['STATE_CODE'] = st_df.STATE_CODE.apply(pd.to_numeric, args=('coerce',))
     st_lu = st_df[['STATE_CODE','STATE','STATE_NAME']]
     st_lu = st_lu.dropna(axis=0,how='any')
@@ -106,6 +154,22 @@ def _standardized_field_cleaning(df,lu_df):
     sc = {'C': True, 'S': False}
     df['COMPLEX'] = False
     df.COMPLEX = df.SINGLE_COMPLEX_FLAG.map(sc, na_action=None)
+    
+    # general fire behavior
+    gfb_rows = lu_df[lu_df.CODE_TYPE == 'GENERAL_FIRE_BEHAVIOR']
+    gfb_lu = gfb_rows[['LUCODES_IDENTIFIER','CODE_NAME']]
+    gfb_lu.columns = ['GEN_FIRE_BEHAVIOR_IDENTIFIER','GEN_FIRE_BEHAVIOR']
+    df = df.merge(gfb_lu, how='left')
+    
+    # fire behavior 1, 2, 3
+    fb_rows = lu_df[lu_df.CODE_TYPE == 'FIRE_BEHAVIOR_CHARACTERISTIC']
+    fb_lu = fb_rows[['LUCODES_IDENTIFIER','CODE_NAME']]
+    fb_lu.columns = ['FIRE_BEHAVIOR_1_IDENTIFIER','FIRE_BEHAVIOR_1']
+    df = df.merge(fb_lu, how='left')
+    fb_lu.columns = ['FIRE_BEHAVIOR_2_IDENTIFIER','FIRE_BEHAVIOR_2']
+    df = df.merge(fb_lu, how='left')
+    fb_lu.columns = ['FIRE_BEHAVIOR_3_IDENTIFIER','FIRE_BEHAVIOR_3']
+    df = df.merge(fb_lu, how='left')
     
     return df
 
@@ -122,18 +186,22 @@ def _derive_new_fields(df):
     return df
 
 def _patch_missing_sitrep_fields(df):
-    inc_df = pd.read_csv('../../data/out/SIT209_HISTORY_INCIDENTS_{}.csv'.format(curr_timespan))
+    #print("shape Before patch shape: {}".format(df.shape))
+    inc_df = pd.read_csv(os.path.join(out_dir,
+                                      'SIT209_HISTORY_INCIDENTS_{}.csv'.format(curr_timespan)))
     
+    # Adding in the IRWIN_IDENTIFIER, FIRECODE, PROT_UNIT here 4/11/22
     inc_xref = inc_df[['INCIDENT_IDENTIFIER','INCIDENT_NAME','INCIDENT_NUMBER','CAUSE_IDENTIFIER','DISCOVERY_DATE',\
                        'INCTYP_IDENTIFIER','POO_SHORT_LOCATION_DESC','POO_CITY','POO_STATE_CODE','POO_COUNTY_CODE',\
                        'POO_DONWCGU_OWN_IDENTIFIER','POO_LATITUDE','POO_LONGITUDE','POO_LD_PM_IDENTIFIER','POO_LD_QTR_QTR_SEC',\
                       'POO_LD_QTR_SEC','POO_LD_RGE','POO_LD_SEC','POO_LD_TWP','POO_US_NGR_XCOORD','POO_US_NGR_YCOORD',\
-                      'POO_US_NGR_ZONE','POO_UTM_EASTING','POO_UTM_NORTHING','POO_UTM_ZONE','SINGLE_COMPLEX_FLAG']].copy()
-    inc_xref.drop_duplicates()
+                      'POO_US_NGR_ZONE','POO_UTM_EASTING','POO_UTM_NORTHING','POO_UTM_ZONE','SINGLE_COMPLEX_FLAG',
+                      'IRWIN_IDENTIFIER','FIRECODE','NWCG_PROT_UNIT_IDENTIFIER']].copy()
+    inc_xref = inc_xref.groupby(['INCIDENT_IDENTIFIER']).first().reset_index()
     inc_xref.columns = ['INC_IDENTIFIER','M_INCIDENT_NAME','M_INCIDENT_NUMBER','M_CAUSE','M_DISC','M_INCTYP','M_LOC_DESC',\
                         'M_CITY','M_STATE','M_COUNTY','M_DONWCGU','M_LATITUDE','M_LONGITUDE','M_LD_PM',
                         'M_LD_QTR_QTR_SEC','M_LD_QTR_SEC','M_LD_RGE','M_LD_SEC','M_LD_TWP','M_XCOORD','M_YCOORD','M_NGR_ZONE',\
-                       'M_EASTING','M_NORTHING','M_UTM_ZONE','M_CPX_FLAG']
+                       'M_EASTING','M_NORTHING','M_UTM_ZONE','M_CPX_FLAG','IRWIN_ID','FIRECODE','NWCG_IDENTIFIER']
     
     df['INCIDENT_NAME'] = df.INCIDENT_NAME.astype(str).str.strip()
     df['INCIDENT_NUMBER'] = df.INCIDENT_NUMBER.astype(str).str.strip()
@@ -146,65 +214,175 @@ def _patch_missing_sitrep_fields(df):
     df['M_INCIDENT_NUMBER'] = df.M_INCIDENT_NUMBER.astype(str).str.strip()
     df['M_CITY'] = df.M_CITY.astype(str).str.strip()
     df['M_LOC_DESC'] = df.M_LOC_DESC.astype(str).str.strip()
+    #print("nulls before inc name: {}".format((df.loc[df.INCIDENT_NAME=="nan"].shape[0]/df.shape[0])))
     df.loc[df.INCIDENT_NAME=="nan", 'INCIDENT_NAME'] = df.M_INCIDENT_NAME
+    #print("nulls after inc name: {}".format((df.loc[df.INCIDENT_NAME=="nan"].shape[0]/df.shape[0])))
+    #print("nulls before inc num: {}".format((df.loc[df.INCIDENT_NUMBER=="nan"].shape[0]/df.shape[0])))
     df.loc[df.INCIDENT_NUMBER=="nan", 'INCIDENT_NUMBER'] = df.M_INCIDENT_NUMBER
+    #print("nulls after inc num: {}".format((df.loc[df.INCIDENT_NUMBER=="nan"].shape[0]/df.shape[0])))
+    #print("nulls before cause id: {}".format((df.loc[df.CAUSE_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.CAUSE_IDENTIFIER.isnull()].shape[0]
     df.loc[df.CAUSE_IDENTIFIER.isnull(),'CAUSE_IDENTIFIER'] = df.M_CAUSE
+    #print("nulls after cause id: {}".format((df.loc[df.CAUSE_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.CAUSE_IDENTIFIER.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("nulls before discovery: {}".format((df.loc[df.DISCOVERY_DATE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.DISCOVERY_DATE.isnull(),'DISCOVERY_DATE'] = df.M_DISC
+    #print("nulls after discovery: {}".format((df.loc[df.DISCOVERY_DATE.isnull()].shape[0]/df.shape[0])))
+    #print("nulls before inc typ: {}".format((df.loc[df.INCTYP_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     df.loc[df.INCTYP_IDENTIFIER.isnull(),'INCTYP_IDENTIFIER'] = df.M_INCTYP
+    #print("nulls after inc typ: {}".format((df.loc[df.INCTYP_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     
     # Location variables
+    t1 = df.loc[df.POO_SHORT_LOCATION_DESC=="nan"].shape[0]
+    #print("loc desc before: {}".format((df.loc[df.POO_SHORT_LOCATION_DESC=="nan"].shape[0]/df.shape[0])))
     df.loc[df.POO_SHORT_LOCATION_DESC=="nan",'POO_SHORT_LOCATION_DESC'] = df.M_LOC_DESC
+    t2 = df.loc[df.POO_SHORT_LOCATION_DESC=="nan"].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("loc desc after: {}".format((df.loc[df.POO_SHORT_LOCATION_DESC=="nan"].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_CITY=="nan"].shape[0]
+    #print("t1={}".format(t1))
+    #print("city before: {}".format((df.loc[df.POO_CITY=="nan"].shape[0]/df.shape[0])))
     df.loc[df.POO_CITY=="nan",'POO_CITY'] = df.M_CITY
+    t2 = df.loc[df.POO_CITY=="nan"].shape[0]
+    #print("t2={}".format(t2))
+    #print("city after: {}".format((df.loc[df.POO_CITY=="nan"].shape[0]/df.shape[0])))
+    #print("change: {}".format(t1-t2))
+    #print("county before: {}".format((df.loc[df.POO_COUNTY_CODE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_COUNTY_CODE.isnull(),'POO_COUNTY_CODE'] = df.M_COUNTY
+    #print("county after: {}".format((df.loc[df.POO_COUNTY_CODE.isnull()].shape[0]/df.shape[0])))
+    #print("state before: {}".format((df.loc[df.POO_STATE_CODE.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_STATE_CODE.isnull(),'POO_STATE_CODE'] = df.M_STATE
+    #print("state after: {}".format((df.loc[df.POO_STATE_CODE.isnull()].shape[0]/df.shape[0])))
+    #print("donwcgu before: {}".format((df.loc[df.POO_DONWCGU_OWN_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
     df.loc[df.POO_DONWCGU_OWN_IDENTIFIER.isnull(),'POO_DONWCGU_OWN_IDENTIFIER'] = df.M_DONWCGU
-    df.loc[df.POO_LATITUDE.isnull(),'POO_LATITUDE'] = df.M_LATITUDE
-    df.loc[df.POO_LONGITUDE.isnull(),'POO_LONGITUDE'] = df.M_LONGITUDE
+    #print("donwcgu after: {}".format((df.loc[df.POO_DONWCGU_OWN_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
+    
+    # Default latitude/longitude to value in INCIDENTS record for consistency
+    #print("latitude before: {}".format((df.loc[df.POO_LATITUDE.isnull()].shape[0]/df.shape[0])))
+    df.loc[~df.M_LATITUDE.isnull(),'POO_LATITUDE'] = df.M_LATITUDE
+    #print("latitude after: {}".format((df.loc[df.POO_LATITUDE.isnull()].shape[0]/df.shape[0])))
+    #print("longitude before: {}".format((df.loc[df.POO_LONGITUDE.isnull()].shape[0]/df.shape[0])))
+    df.loc[~df.M_LONGITUDE.isnull(),'POO_LONGITUDE'] = df.M_LONGITUDE
+    #print("longitude after: {}".format((df.loc[df.POO_LONGITUDE.isnull()].shape[0]/df.shape[0])))
+    
+    #print("ld pm before: {}".format((df.loc[df.POO_LD_PM_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_LD_PM_IDENTIFIER.isnull()].shape[0]
     df.loc[df.POO_LD_PM_IDENTIFIER.isnull(),'POO_LD_PM_IDENTIFIER'] = df.M_LD_PM
+    #print("ld pm after: {}".format((df.loc[df.POO_LD_PM_IDENTIFIER.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_LD_PM_IDENTIFIER.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("qtr qtr sec before: {}".format((df.loc[df.POO_LD_QTR_QTR_SEC.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_LD_QTR_QTR_SEC.isnull()].shape[0]
     df.loc[df.POO_LD_QTR_QTR_SEC.isnull(),'POO_LD_QTR_QTR_SEC'] = df.M_LD_QTR_QTR_SEC
+    #print("qtr qtr sec after: {}".format((df.loc[df.POO_LD_QTR_QTR_SEC.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_LD_QTR_QTR_SEC.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("qtr sec before: {}".format((df.loc[df.POO_LD_QTR_SEC.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_LD_QTR_SEC.isnull()].shape[0]
     df.loc[df.POO_LD_QTR_SEC.isnull(),'POO_LD_QTR_SEC'] = df.M_LD_QTR_SEC
+    #print("qtr sec after: {}".format((df.loc[df.POO_LD_QTR_SEC.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_LD_QTR_SEC.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("rge before: {}".format((df.loc[df.POO_LD_RGE.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_LD_RGE.isnull()].shape[0]
     df.loc[df.POO_LD_RGE.isnull(),'POO_LD_RGE'] = df.M_LD_RGE
+    #print("rge after: {}".format((df.loc[df.POO_LD_RGE.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_LD_RGE.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("sec before: {}".format((df.loc[df.POO_LD_SEC.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_LD_SEC.isnull()].shape[0]
     df.loc[df.POO_LD_SEC.isnull(),'POO_LD_SEC'] = df.M_LD_SEC
+    #print("sec after: {}".format((df.loc[df.POO_LD_SEC.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_LD_SEC.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("twp before: {}".format((df.loc[df.POO_LD_TWP.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_LD_TWP.isnull()].shape[0]
     df.loc[df.POO_LD_TWP.isnull(),'POO_LD_TWP'] = df.M_LD_TWP
+    #print("twp after: {}".format((df.loc[df.POO_LD_TWP.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_LD_TWP.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("xcoord before: {}".format((df.loc[df.POO_US_NGR_XCOORD.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_US_NGR_XCOORD.isnull()].shape[0]
     df.loc[df.POO_US_NGR_XCOORD.isnull(),'POO_US_NGR_XCOORD'] = df.M_XCOORD
+    #print("xcoord after: {}".format((df.loc[df.POO_US_NGR_XCOORD.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_US_NGR_XCOORD.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("ycoord before: {}".format((df.loc[df.POO_US_NGR_YCOORD.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_US_NGR_YCOORD.isnull()].shape[0]
     df.loc[df.POO_US_NGR_YCOORD.isnull(),'POO_US_NGR_YCOORD'] = df.M_YCOORD
+    #print("ycoord after: {}".format((df.loc[df.POO_US_NGR_YCOORD.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_US_NGR_YCOORD.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("ngr zone before: {}".format((df.loc[df.POO_US_NGR_ZONE.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_US_NGR_ZONE.isnull()].shape[0]
     df.loc[df.POO_US_NGR_ZONE.isnull(),'POO_US_NGR_ZONE'] = df.M_NGR_ZONE
+    #print("ngr zone after: {}".format((df.loc[df.POO_US_NGR_ZONE.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_US_NGR_ZONE.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("utm easting before: {}".format((df.loc[df.POO_UTM_EASTING.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_UTM_EASTING.isnull()].shape[0]
     df.loc[df.POO_UTM_EASTING.isnull(),'POO_UTM_EASTING'] = df.M_EASTING
+    #print("utm easting after: {}".format((df.loc[df.POO_UTM_EASTING.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_UTM_EASTING.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("utm northing before: {}".format((df.loc[df.POO_UTM_NORTHING.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_UTM_NORTHING.isnull()].shape[0]
     df.loc[df.POO_UTM_NORTHING.isnull(),'POO_UTM_NORTHING'] = df.M_NORTHING
+    #print("utm northing after: {}".format((df.loc[df.POO_UTM_NORTHING.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_UTM_NORTHING.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("utm zone before: {}".format((df.loc[df.POO_UTM_ZONE.isnull()].shape[0]/df.shape[0])))
+    t1 = df.loc[df.POO_UTM_ZONE.isnull()].shape[0]
     df.loc[df.POO_UTM_ZONE.isnull(),'POO_UTM_ZONE'] = df.M_UTM_ZONE
+    #print("utm zone after: {}".format((df.loc[df.POO_UTM_ZONE.isnull()].shape[0]/df.shape[0])))
+    t2 = df.loc[df.POO_UTM_ZONE.isnull()].shape[0]
+    #print("change: {}".format(t1-t2))
+    #print("single cpx flag: {}".format((df.loc[df.SINGLE_COMPLEX_FLAG.isnull()].shape[0]/df.shape[0])))
     df.loc[df.SINGLE_COMPLEX_FLAG.isnull(),'SINGLE_COMPLEX_FLAG'] = df.M_CPX_FLAG
+    #print("single cpx after: {}".format((df.loc[df.SINGLE_COMPLEX_FLAG.isnull()].shape[0]/df.shape[0])))
     
     df.drop(['M_INCIDENT_NAME','M_INCIDENT_NUMBER','M_CAUSE','M_DISC','M_INCTYP','M_CITY','M_COUNTY',\
             'M_DONWCGU','M_LATITUDE','M_LONGITUDE','M_LD_PM','M_LD_QTR_QTR_SEC','M_LD_QTR_SEC','M_LD_RGE',\
             'M_LD_SEC','M_LD_TWP','M_LOC_DESC','M_STATE','M_XCOORD','M_YCOORD','M_NGR_ZONE','M_EASTING',\
             'M_NORTHING','M_UTM_ZONE','M_CPX_FLAG'],axis=1,inplace=True)
+    #print("shape After patch {}".format(df.shape))
+
     return df
     
 def _create_incident_id(df):
     # forward fill added to fix sparcity issue 2015/2016 data when creating incident ID
+    print("Creating incident ID")
     df = df.sort_values(['INC_IDENTIFIER','REPORT_TO_DATE']).copy()
     df = df.reset_index(drop=True)
     
     dfinc = df.sort_values(['INC_IDENTIFIER','REPORT_TO_DATE']).groupby('INC_IDENTIFIER').nth(-1).reset_index()
     # Set incident ID to final fire name for INC_IDENTIFIER
-    dfinc['INCIDENT_ID'] = dfinc.START_YEAR.astype(int).astype(str) + '_' + dfinc.INCIDENT_NUMBER.astype(str).str.strip() + \
+    # Use INC_IDENTIFIER, remove str.strip()? temporary? 1/11/2021 - Lise (save previous as INCIDENT_ID_OLD)
+    dfinc['INCIDENT_ID'] = dfinc.START_YEAR.astype(int).astype(str) + '_' + dfinc.INC_IDENTIFIER.astype(int).astype(str) + \
+                            '_' + dfinc.INCIDENT_NAME.astype(str).str.strip().str.upper()
+    dfinc['INCIDENT_ID_OLD'] = dfinc.START_YEAR.astype(int).astype(str) + '_' + dfinc.INCIDENT_NUMBER.str.strip().astype(str) + \
                             '_' + dfinc.INCIDENT_NAME.astype(str).str.strip().str.upper()
     g1 = dfinc.groupby(['INCIDENT_ID']).size().reset_index(name="num_rows")
     duplicate_inc_ids = g1.loc[g1.num_rows>1]
     duplicate_inc_ids.to_csv('../../data/tmp/dup_inc_identfier.csv')
     print("#incidents: {}".format(g1.shape[0]))
     print("% duplicates = {}".format(duplicate_inc_ids.shape[0]/g1.shape[0]))
-    #print("Duplicate INC Incident Identifiers:") # no longer splitting on incident_number
-    #print(g1.loc[g1.num_rows>1])
-    dfIDxref = dfinc[['INC_IDENTIFIER','INCIDENT_ID']]
+    print("Duplicate INC Incident Identifiers:") # no longer splitting on incident_number
+    print(g1.loc[g1.num_rows>1])
+    dfIDxref = dfinc[['INC_IDENTIFIER','INCIDENT_ID','INCIDENT_ID_OLD']]
     print(df.shape)
     df = pd.merge(df, dfIDxref, on=['INC_IDENTIFIER'], how='left')
+    print(df.INCIDENT_ID.head())
     print(df.shape)
     return df
 
 def _latitude_longitude_updates(df):
-    curr_loc = pd.read_csv('../../data/raw/latlong_clean/2014_cleaned_ll-fod.csv')
-    curr_loc = curr_loc.loc[:, 'INC_IDENTIFIER':'LL_CONFIDENCE']
+    curr_loc = pd.read_csv(os.path.join(data_dir,
+                                        'raw',
+                                        'latlong_clean',
+                                        '2014_cleaned_ll-fod.csv'))
+    curr_loc = curr_loc.loc[:, ~curr_loc.columns.str.contains('^Unnamed')]
     df = df.merge(curr_loc, on=['INC_IDENTIFIER'],how='left')
     # Set the Update Flag
     df.loc[df.lat_c.notnull(),'LL_UPDATE'] = True
@@ -219,8 +397,11 @@ def _latitude_longitude_updates(df):
 
 def _get_str_ext(lu_tbl):
     # read in structures table
-    dfc_str = pd.read_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_AFFECTED_STRUCTS_{}.csv'.format(curr_timespan))
+    dfc_str = pd.read_csv(os.path.join(out_dir,
+                                      'SIT209_HISTORY_INCIDENT_209_AFFECTED_STRUCTS_{}.csv'.format(curr_timespan)))
     dfc_str = dfc_str.loc[:, ~dfc_str.columns.str.contains('^Unnamed')]
+    # Added to deal with duplication issue 8/16/21
+    dfc_str = dfc_str.drop_duplicates()
     
     # get structure type from the lookup table
     sst_rows = lu_tbl[lu_tbl.CODE_TYPE == 'STRUCTURE_SUMMARY_TYPE']
@@ -257,7 +438,8 @@ def _get_str_ext(lu_tbl):
     return dfc_str_merge
         
 def _get_res_ext(lu_tbl):
-    dfc_res = pd.read_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_RES_UTILIZATIONS_{}.csv'.format(curr_timespan))
+    dfc_res = pd.read_csv(os.path.join(out_dir,
+                                       'SIT209_HISTORY_INCIDENT_209_RES_UTILIZATIONS_{}.csv'.format(curr_timespan)))
     dfc_res = dfc_res.loc[:, ~dfc_res.columns.str.contains('^Unnamed')]
     
     res_rows = lu_tbl[lu_tbl.CODE_TYPE == 'RESOURCE_TYPE']
@@ -265,7 +447,8 @@ def _get_res_ext(lu_tbl):
     res_lu.columns = ['RESTYP_IDENTIFIER','RESTYP']
 
     dfc_res = dfc_res.merge(res_lu, how='left')
-    dfc_res.to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_RES_UTILIZATIONS_{}.csv'.format(curr_timespan))
+    dfc_res.to_csv(os.path.join(out_dir,
+                                'SIT209_HISTORY_INCIDENT_209_RES_UTILIZATIONS_{}.csv'.format(curr_timespan)))
     
     # pivot the table
     dfc_res_piv = dfc_res.pivot_table(index=['INC209R_IDENTIFIER'], columns=['RESTYP'],
@@ -320,41 +503,140 @@ def _get_res_ext(lu_tbl):
     
 def _get_curr_cslty_ext(lu_tbl):
     # Open casualty/illness table
-    dfc_cslty = pd.read_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_CSLTY_ILLNESSES_{}.csv'.format(curr_timespan))
+    dfc_cslty = pd.read_csv(os.path.join(out_dir,
+                                         'SIT209_HISTORY_INCIDENT_209_CSLTY_ILLNESSES_{}.csv'.format(curr_timespan)))
     dfc_cslty = dfc_cslty.loc[:, ~dfc_cslty.columns.str.contains('^Unnamed')]
+    
+    print(dfc_cslty.shape)
+    dfc_cslty.drop_duplicates(inplace=True)
+    print(dfc_cslty.shape)
+    
+    r_df = dfc_cslty.loc[dfc_cslty.RESPONDER_PUBLIC_FLAG == "R"]
+    print(r_df.shape)
+    p_df = dfc_cslty.loc[dfc_cslty.RESPONDER_PUBLIC_FLAG == "P"]
+    print(p_df.shape)
 
     # Get casualty/illness values
     cit_rows = lu_tbl[lu_tbl.CODE_TYPE == 'CASUALTY_ILLNESS_TYPE']
     cit_lu = cit_rows[['LUCODES_IDENTIFIER','ABBREVIATION']]
     cit_lu.columns = ['CIT_IDENTIFIER','CIT']
-
-    # Merge in casualty/illness type
-    dfc_cslty = dfc_cslty.merge(cit_lu, on='CIT_IDENTIFIER',how='left')
-    dfc_cslty = dfc_cslty.loc[dfc_cslty.CIT.isin(['II','E','F'])] # restrict to Injury/Illness, Evacuation, Fatality
+    
+    r_df = r_df.merge(cit_lu, on='CIT_IDENTIFIER', how='left')
+    p_df = p_df.merge(cit_lu, on='CIT_IDENTIFIER', how='left')
+    
+    # Get Public
+    p_df = p_df.loc[p_df.CIT.isin(['II','E','F'])] # restrict to Injury/Illness, Evacuation, Fatality
     
     # Sum public/responder to simplify pivot
-    df_qtyrep = dfc_cslty.groupby(['INC209R_IDENTIFIER','CIT']).QTY_THIS_REP_PERIOD.sum().reset_index(name="THIS_PERIOD_SUM")
-    df_todate = dfc_cslty.groupby(['INC209R_IDENTIFIER','CIT']).QTY_TO_DATE.sum().reset_index(name="TO_DATE_SUM")
-    df_cslty = df_qtyrep.merge(df_todate,on=['INC209R_IDENTIFIER','CIT'])
+    pdf_qtyrep = p_df.groupby(['INC209R_IDENTIFIER','CIT']).QTY_THIS_REP_PERIOD.sum().reset_index(name="RPT_P")
+    pdf_todate = p_df.groupby(['INC209R_IDENTIFIER','CIT']).QTY_TO_DATE.sum().reset_index(name="TOT_P")
+    pdf = pdf_qtyrep.merge(pdf_todate,on=['INC209R_IDENTIFIER','CIT'])
     
     # pivot table and rename columns
-    df_cslty_piv = df_cslty.pivot_table(index=['INC209R_IDENTIFIER'],columns=['CIT'],values=['THIS_PERIOD_SUM','TO_DATE_SUM'])
-    df_cslty_piv.columns = ["_".join((i,j)) for i,j in df_cslty_piv.columns]
-    df_cslty_piv.reset_index(inplace=True)
-    df_cslty_piv.fillna(0, inplace=True)
-    df_cslty_piv.head()        
-
-    df_cslty_piv.columns = ['INC209R_IDENTIFIER','NUM_EVACUATED','FATALITIES_THIS_PERIOD','INJURIES','NUM_EVAC_TO_DATE',\
-                        'FATALITIES','INJURIES_TO_DATE']
-    df_cslty_piv.loc[df_cslty_piv.NUM_EVACUATED > 0, 'EVACUATION_IN_PROGRESS'] = True
+    pdf_piv = pdf.pivot_table(index=['INC209R_IDENTIFIER'],columns=['CIT'],values=['RPT_P','TOT_P'])
+    pdf_piv.columns = ["_".join((i,j)) for i,j in pdf_piv.columns]
+    pdf_piv.reset_index(inplace=True)
+    pdf_piv.fillna(0, inplace=True)
+    
+    # Get Responder
+    r_df = r_df.loc[r_df.CIT.isin(['II','F'])] # restrict to Injury/Illness & Fatality
+    
+    # Sum public/responder to simplify pivot
+    rdf_qtyrep = r_df.groupby(['INC209R_IDENTIFIER','CIT']).QTY_THIS_REP_PERIOD.sum().reset_index(name="RPT_R")
+    rdf_todate = r_df.groupby(['INC209R_IDENTIFIER','CIT']).QTY_TO_DATE.sum().reset_index(name="TOT_R")
+    rdf = rdf_qtyrep.merge(rdf_todate,on=['INC209R_IDENTIFIER','CIT'])
+    
+    # pivot table and rename columns
+    rdf_piv = rdf.pivot_table(index=['INC209R_IDENTIFIER'],columns=['CIT'],values=['RPT_R','TOT_R'])
+    rdf_piv.columns = ["_".join((i,j)) for i,j in rdf_piv.columns]
+    rdf_piv.reset_index(inplace=True)
+    rdf_piv.fillna(0, inplace=True)
+    
+    df_cslty_piv = rdf_piv.merge(pdf_piv,on='INC209R_IDENTIFIER',how='outer')
+    df_cslty_piv.fillna(0,inplace=True)
+    
+    df_cslty_piv.columns = ['INC209R_IDENTIFIER',
+                       'RPT_R_FATALITIES','RPT_R_INJURIES',
+                       'TOTAL_R_FATALITIES','TOTAL_R_INJURIES',
+                       'RPT_EVACUATIONS','RPT_P_FATALITIES','RPT_P_INJURIES',
+                       'TOTAL_EVACUATIONS','TOTAL_P_FATALITIES','TOTAL_P_INJURIES']
+    df_cslty_piv['RPT_FATALITIES'] = df_cslty_piv.RPT_R_FATALITIES + df_cslty_piv.RPT_P_FATALITIES
+    df_cslty_piv['FATALITIES'] = df_cslty_piv.TOTAL_R_FATALITIES + df_cslty_piv.TOTAL_P_FATALITIES
+    df_cslty_piv['INJURIES'] = df_cslty_piv.RPT_R_INJURIES + df_cslty_piv.RPT_P_INJURIES
+    df_cslty_piv['INJURIES_TO_DATE'] = df_cslty_piv.TOTAL_R_INJURIES + df_cslty_piv.TOTAL_P_INJURIES
+    
     return df_cslty_piv
 
+
+def _get_curr_sup_ext(lu_tbl):
+    dfc_sup = pd.read_csv(os.path.join(out_dir,
+                                      'SIT209_HISTORY_INCIDENT_209_STRATEGIES_{}.csv'.format(curr_timespan)))
+    dfc_sup = dfc_sup.loc[:, ~dfc_sup.columns.str.contains('^Unnamed')]
+    # Added to deal with duplication issue 8/16/21
+    dfc_sup = dfc_sup.drop_duplicates()
+    
+    # get structure type from the lookup table
+    sup_rows = lu_tbl[lu_tbl.CODE_TYPE == 'FIRE_SUPPRESSION_STRATEGY']
+    sup_lu = sup_rows[['LUCODES_IDENTIFIER','ABBREVIATION']]
+    sup_lu.columns = ['STRATEGY_IDENTIFIER','STRATEGY']
+    
+    # Merge in suppression method description
+    dfc_sup = dfc_sup.merge(sup_lu, how='left')
+    # Pivot the table
+    dfc_sup_piv = dfc_sup.pivot_table(index=['INC209R_IDENTIFIER'], columns=['STRATEGY'], values=['PERCENT_UTILIZED'])
+    dfc_sup_piv.columns = ["_".join((i,j)) for i,j in dfc_sup_piv.columns]
+    dfc_sup_piv.reset_index(inplace=True)
+    # Fill nulls
+    dfc_sup_piv = dfc_sup_piv.fillna(0)
+    
+    dfc_sup_piv.columns = ['INC209R_IDENTIFIER','PERCENT_C','PERCENT_FS','PERCENT_M','PERCENT_PZP']
+    
+    # Create SUPPRESSION_METHOD, SUPPRESSION_METHOD_FULLNAME fields
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_PZP == 100, 'SUPPRESSION_METHOD'] = 'PZP'
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_PZP == 100, 'SUPPRESSION_METHOD_FULLNAME'] = 'Point Zone Protection'
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_C == 100, 'SUPPRESSION_METHOD'] = 'C'
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_C == 100, 'SUPPRESSION_METHOD_FULLNAME'] = 'Confine'
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_M == 100, 'SUPPRESSION_METHOD'] = 'M'
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_M == 100, 'SUPPRESSION_METHOD_FULLNAME'] = 'Monitor'
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_FS == 100, 'SUPPRESSION_METHOD'] = 'FS'
+    dfc_sup_piv.loc[dfc_sup_piv.PERCENT_FS == 100, 'SUPPRESSION_METHOD_FULLNAME'] = 'Full Supression'
+    
+    dfc_sup_piv['TOTAL'] = dfc_sup_piv.PERCENT_C + dfc_sup_piv.PERCENT_FS + \
+                           dfc_sup_piv.PERCENT_M + dfc_sup_piv.PERCENT_PZP
+    
+    dfc_sup_piv.loc[(dfc_sup_piv.SUPPRESSION_METHOD.isnull()) & (dfc_sup_piv.TOTAL > 0), 
+                                                                'SUPPRESSION_METHOD'] = 'MMS'
+    dfc_sup_piv.loc[dfc_sup_piv.SUPPRESSION_METHOD == "MMS", 'SUPPRESSION_METHOD_FULLNAME'] = \
+                                                                'Managed with Multiple Strategies '
+    
+    dfc_sup_piv.drop(['TOTAL'],axis=1,inplace=True)
+    return dfc_sup_piv
+
+def _link_prot_unit(df):
+    
+    # Read in commondata nwcg units file
+    nwcg_units = pd.read_csv(os.path.join(out_dir,'COMMONDATA_NWCG_UNITS_{}.csv'.format(curr_timespan)),
+                            low_memory=False)
+    nwcg_tbl = nwcg_units[['NWCG_IDENTIFIER','UNITID','NAME','UNIT_TYPE']].copy()
+    nwcg_tbl.columns = ['NWCG_IDENTIFIER', 'PROT_UNITID','PROT_UNIT_NAME','PROT_UNIT_TYPE']
+    nwcg_tbl.drop_duplicates(inplace=True)
+    
+    df = df.merge(nwcg_tbl, on=['NWCG_IDENTIFIER'],how='left') 
+    return df
+
 def current_merge_prep():
-    df = pd.read_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_REPORTS_{}.csv'.format(curr_timespan), parse_dates=True,\
+    df = pd.read_csv(os.path.join(out_dir,
+                                  'SIT209_HISTORY_INCIDENT_209_REPORTS_{}.csv'.format(curr_timespan)), 
+                     parse_dates=True,
                      low_memory=False)
-    lu_df = pd.read_csv('../../data/out/SIT209_LOOKUP_CODES.csv',low_memory=False)
+    lu_df = pd.read_csv(os.path.join(out_dir,
+                                     'SIT209_LOOKUP_CODES.csv'),low_memory=False)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+    
+    # Initial cleaning steps
+    df = _record_delete_and_merge(df)
     df = _patch_missing_sitrep_fields(df)
+   
     df = _clean_and_format_date_and_time_fields(df)
     df = _derive_new_fields(df)
     
@@ -362,11 +644,13 @@ def current_merge_prep():
     df = _standardized_field_cleaning(df,lu_df)
     df = _create_incident_id(df)
     df = _latitude_longitude_updates(df)
-
+    df = _link_prot_unit(df) # added for 2.0
+    
     # save id xref and output files
     dfIDxref = df[['INC_IDENTIFIER','INCIDENT_ID']]
     dfIDxref = dfIDxref.drop_duplicates()
     df_str_ext = _get_str_ext(lu_df)
+    df_str_ext.to_csv('../../data/tmp/str_out.csv')
     df_ext = pd.merge(df,df_str_ext,on=['INC209R_IDENTIFIER'],how='left')
     print("After structure merge: {}".format(df_ext.shape))
     df_res_ext = _get_res_ext(lu_df)
@@ -375,6 +659,10 @@ def current_merge_prep():
     df_cslty_ext = _get_curr_cslty_ext(lu_df)
     df_ext = pd.merge(df_ext,df_cslty_ext,on=['INC209R_IDENTIFIER'],how='left')
     print("After casualty merge: {}".format(df_ext.shape))
+    df_sup_ext = _get_curr_sup_ext(lu_df)
+    df_ext = pd.merge(df_ext,df_sup_ext,on=['INC209R_IDENTIFIER'],how='left')
+    print("After suppression strategy merge: {}".format(df_ext.shape))
     print("Current System merge preparation complete. {}".format(df_ext.shape))
-    
-    df_ext.to_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_REPORTS_{}_cleaned.csv'.format(curr_timespan))
+    df_ext.to_csv(os.path.join(out_dir,
+                               'SIT209_HISTORY_INCIDENT_209_REPORTS_{}_cleaned.csv'.format(curr_timespan)))
+
