@@ -7,6 +7,8 @@ import earthpy as et
 curr_timespan = '2014to2020'
 data_dir = os.path.join(et.io.HOME, 'data')
 out_dir = os.path.join(data_dir, 'out')
+nwcgdata_dir = os.path.join(data_dir,'raw','common_data')
+tmp_dir = os.path.join(data_dir, 'tmp')
 
 def _record_delete_and_merge(df):
     
@@ -31,10 +33,16 @@ def _record_delete_and_merge(df):
     # create merge dictionary
     merge = df_cln.loc[df_cln.action == 'merge'][['INC_IDENTIFIER','ID']].copy()
     merge_dict = merge.set_index('INC_IDENTIFIER').to_dict()['ID']
-    print(merge_dict)
+    #print(merge_dict)
     
-    print("Before removing si†reps:")
+    print("Before removing sitreps:")
     print(df.shape[0])
+    
+    # Save deleted sitreps
+    df_del = df.loc[df.INC_IDENTIFIER.isin(inc_del_list)]
+    df_del.to_csv(os.path.join(out_dir,"ics209_sitreps_deleted_curr_{}.csv".format(curr_timespan)))
+    print("Records deleted: {}".format(df_del.shape[0]))
+        
     # delete incidents and sitreps
     df = df.loc[~df.INC_IDENTIFIER.isin(inc_del_list)]
     df = df.loc[~df.INC209R_IDENTIFIER.isin(sit_del_list)]
@@ -85,20 +93,25 @@ def _clean_and_format_date_and_time_fields(df):
     
 def _standardized_field_cleaning(df,lu_df):
     print("Cleaning fields...")
+    lu_df = lu_df.copy()
+    lu_df.drop_duplicates(inplace=True)
+    
     # cause lookup
     ca_rows = lu_df[lu_df.CODE_TYPE == 'CA']
     ca_lu = ca_rows[['LUCODES_IDENTIFIER','ABBREVIATION']]
     ca_lu.columns = ['CAUSE_IDENTIFIER','CAUSE']
     df = df.merge(ca_lu, how='left')
-    print(df.shape)
     
     # fuel model lookup
     fm_rows = lu_df[lu_df.CODE_TYPE == 'MATERIAL_INVOLVEMENT_TYPE']
-    fm_lu = fm_rows[['LUCODES_IDENTIFIER','CODE_NAME']]
+    fm_lu = fm_rows[['LUCODES_IDENTIFIER','CODE_NAME']].copy()
+    fm_lu.drop_duplicates(inplace=True)
     fm_lu.columns = ['FUEL_MODEL_IDENTIFIER','FUEL_MODEL']
     df = df.merge(fm_lu, how='left')
+    
     fm_lu.columns = ['ADDNTL_FUEL_MODEL_IDENTIFIER','ADDNTL_FUEL_MODEL']
     df = df.merge(fm_lu, how='left')
+    
     fm_lu.columns = ['SECNDRY_FUEL_MODEL_IDENTIFIER','SECNDRY_FUEL_MODEL']
     df = df.merge(fm_lu, how='left')
     
@@ -108,12 +121,10 @@ def _standardized_field_cleaning(df,lu_df):
     # AREA_MEASUREMENT
     area_uom_lu.columns = ['CURR_INC_AREA_UOM_IDENTIFIER','CURR_INC_AREA_UOM']
     df = df.merge(area_uom_lu, how='left')
-    print(df.shape)
 
     #PROJ_AREA_MEASUREMENT
     area_uom_lu.columns = ['PROJ_INC_AREA_UOM_IDENTIFIER','PROJ_INC_AREA_UOM']
     df = df.merge(area_uom_lu, how='left')
-    print(df.shape)
     
     # convert to 'ACRES'
     df.loc[df['CURR_INC_AREA_UOM'] == 'Acres','ACRES'] = df['CURR_INCIDENT_AREA']
@@ -124,22 +135,18 @@ def _standardized_field_cleaning(df,lu_df):
     tt_lu = tt_rows[['LUCODES_IDENTIFIER','CODE_NAME']]
     tt_lu.columns = ['INC_MGMT_ORG_IDENTIFIER','IMT_MGMT_ORG_DESC'] # column name matches historical field
     df = df.merge(tt_lu, how='left')
-    print(df.shape)
     
     # time zone
     tz_rows = lu_df[lu_df.CODE_TYPE == 'WORLD_TIME_ZONE']
     tz_lu = tz_rows[['LUCODES_IDENTIFIER','CODE_NAME']]
     tz_lu.columns = ['LOCAL_TIMEZONE_IDENTIFIER','LOCAL_TIMEZONE']
     df = df.merge(tz_lu, how='left')
-    print(df.shape)
     
     # principal meridian
     pm_rows = lu_df[lu_df.CODE_TYPE == 'PRINCIPAL_MERIDIAN']
     pm_lu = pm_rows[['LUCODES_IDENTIFIER','CODE_NAME']]
     pm_lu.columns = ['POO_LD_PM_IDENTIFIER','POO_LD_PM']
-    pm_lu.shape
     df = df.merge(pm_lu, how='left')
-    print(df.shape)
     
     # state code/state name
     st_df = pd.read_csv(os.path.join(out_dir,
@@ -149,7 +156,6 @@ def _standardized_field_cleaning(df,lu_df):
     st_lu = st_lu.dropna(axis=0,how='any')
     st_lu.columns = ['POO_STATE_CODE','POO_STATE','POO_STATE_NAME']
     df = df.merge(st_lu, how='left')
-    print(df.shape)
     
     sc = {'C': True, 'S': False}
     df['COMPLEX'] = False
@@ -188,7 +194,8 @@ def _derive_new_fields(df):
 def _patch_missing_sitrep_fields(df):
     #print("shape Before patch shape: {}".format(df.shape))
     inc_df = pd.read_csv(os.path.join(out_dir,
-                                      'SIT209_HISTORY_INCIDENTS_{}.csv'.format(curr_timespan)))
+                                      'SIT209_HISTORY_INCIDENTS_{}.csv'.format(curr_timespan)),
+                                      low_memory=False)
     
     # Adding in the IRWIN_IDENTIFIER, FIRECODE, PROT_UNIT here 4/11/22
     inc_xref = inc_df[['INCIDENT_IDENTIFIER','INCIDENT_NAME','INCIDENT_NUMBER','CAUSE_IDENTIFIER','DISCOVERY_DATE',\
@@ -346,7 +353,7 @@ def _patch_missing_sitrep_fields(df):
             'M_DONWCGU','M_LATITUDE','M_LONGITUDE','M_LD_PM','M_LD_QTR_QTR_SEC','M_LD_QTR_SEC','M_LD_RGE',\
             'M_LD_SEC','M_LD_TWP','M_LOC_DESC','M_STATE','M_XCOORD','M_YCOORD','M_NGR_ZONE','M_EASTING',\
             'M_NORTHING','M_UTM_ZONE','M_CPX_FLAG'],axis=1,inplace=True)
-    #print("shape After patch {}".format(df.shape))
+    print("shape After patch {}".format(df.shape))
 
     return df
     
@@ -371,17 +378,14 @@ def _create_incident_id(df):
     print("Duplicate INC Incident Identifiers:") # no longer splitting on incident_number
     print(g1.loc[g1.num_rows>1])
     dfIDxref = dfinc[['INC_IDENTIFIER','INCIDENT_ID','INCIDENT_ID_OLD']]
-    print(df.shape)
     df = pd.merge(df, dfIDxref, on=['INC_IDENTIFIER'], how='left')
-    print(df.INCIDENT_ID.head())
-    print(df.shape)
     return df
 
 def _latitude_longitude_updates(df):
     curr_loc = pd.read_csv(os.path.join(data_dir,
                                         'raw',
                                         'latlong_clean',
-                                        '2014_cleaned_ll-fod.csv'))
+                                        'curr_cleaned_ll-fod.csv'))
     curr_loc = curr_loc.loc[:, ~curr_loc.columns.str.contains('^Unnamed')]
     df = df.merge(curr_loc, on=['INC_IDENTIFIER'],how='left')
     # Set the Update Flag
@@ -441,6 +445,9 @@ def _get_res_ext(lu_tbl):
     dfc_res = pd.read_csv(os.path.join(out_dir,
                                        'SIT209_HISTORY_INCIDENT_209_RES_UTILIZATIONS_{}.csv'.format(curr_timespan)))
     dfc_res = dfc_res.loc[:, ~dfc_res.columns.str.contains('^Unnamed')]
+    print(dfc_res.shape)
+    dfc_res.drop_duplicates(inplace=True)
+    print(dfc_res.shape)
     
     res_rows = lu_tbl[lu_tbl.CODE_TYPE == 'RESOURCE_TYPE']
     res_lu = res_rows[['LUCODES_IDENTIFIER','ABBREVIATION']]
@@ -564,6 +571,8 @@ def _get_curr_cslty_ext(lu_tbl):
     df_cslty_piv['FATALITIES'] = df_cslty_piv.TOTAL_R_FATALITIES + df_cslty_piv.TOTAL_P_FATALITIES
     df_cslty_piv['INJURIES'] = df_cslty_piv.RPT_R_INJURIES + df_cslty_piv.RPT_P_INJURIES
     df_cslty_piv['INJURIES_TO_DATE'] = df_cslty_piv.TOTAL_R_INJURIES + df_cslty_piv.TOTAL_P_INJURIES
+    df_cslty_piv['NUM_EVACUATED'] = df_cslty_piv.RPT_EVACUATIONS
+    df_cslty_piv['NUM_EVAC_TO_DATE'] = df_cslty_piv.RPT_EVACUATIONS
     
     return df_cslty_piv
 
@@ -573,7 +582,7 @@ def _get_curr_sup_ext(lu_tbl):
                                       'SIT209_HISTORY_INCIDENT_209_STRATEGIES_{}.csv'.format(curr_timespan)))
     dfc_sup = dfc_sup.loc[:, ~dfc_sup.columns.str.contains('^Unnamed')]
     # Added to deal with duplication issue 8/16/21
-    dfc_sup = dfc_sup.drop_duplicates()
+    dfc_sup.drop_duplicates(inplace=True)
     
     # get structure type from the lookup table
     sup_rows = lu_tbl[lu_tbl.CODE_TYPE == 'FIRE_SUPPRESSION_STRATEGY']
@@ -612,14 +621,37 @@ def _get_curr_sup_ext(lu_tbl):
     dfc_sup_piv.drop(['TOTAL'],axis=1,inplace=True)
     return dfc_sup_piv
 
+def clean_nwcg_commondata(nwcg_tbl):
+    data_df = nwcg_tbl.copy()
+    
+    #create_update dictionary
+    upd_df = pd.read_csv(os.path.join(nwcgdata_dir,'nwcg-prot-unit-fix.csv'))
+    upd_tbl = upd_df.loc[upd_df.CORRECT == "Y"].copy()
+    upd_tbl = upd_tbl[['NWCG_IDENTIFIER','PROT_UNIT_NAME']]
+    upd_tbl['PROT_UNIT_NAME'] = upd_tbl.PROT_UNIT_NAME.str.strip()
+    upd_dict = dict(zip(upd_tbl.NWCG_IDENTIFIER, upd_tbl.PROT_UNIT_NAME))
+    
+    # strip text fields and apply the update
+    data_df['PROT_UNIT_NAME'] = data_df.PROT_UNIT_NAME.str.strip()
+    nwcg_tbl['PROT_UNIT_TYPE'] = nwcg_tbl.PROT_UNIT_TYPE.str.strip()
+    data_df.loc[data_df.NWCG_IDENTIFIER.isin(list(upd_dict.keys())),'PROT_UNIT_NAME'] = \
+    data_df['NWCG_IDENTIFIER'].map(upd_dict,na_action=None)
+    
+    data_df['PROT_UNIT_ID'] = data_df.PROT_UNIT_ID.str.strip()
+    # drop the duplicates
+    data_df.drop_duplicates(inplace=True)
+    
+    # return a clean commondata table
+    return data_df
+
 def _link_prot_unit(df):
     
     # Read in commondata nwcg units file
     nwcg_units = pd.read_csv(os.path.join(out_dir,'COMMONDATA_NWCG_UNITS_{}.csv'.format(curr_timespan)),
                             low_memory=False)
     nwcg_tbl = nwcg_units[['NWCG_IDENTIFIER','UNITID','NAME','UNIT_TYPE']].copy()
-    nwcg_tbl.columns = ['NWCG_IDENTIFIER', 'PROT_UNITID','PROT_UNIT_NAME','PROT_UNIT_TYPE']
-    nwcg_tbl.drop_duplicates(inplace=True)
+    nwcg_tbl.columns = ['NWCG_IDENTIFIER', 'PROT_UNIT_ID','PROT_UNIT_NAME','PROT_UNIT_TYPE']
+    nwcg_tbl = clean_nwcg_commondata(nwcg_tbl)
     
     df = df.merge(nwcg_tbl, on=['NWCG_IDENTIFIER'],how='left') 
     return df
@@ -632,25 +664,27 @@ def current_merge_prep():
     lu_df = pd.read_csv(os.path.join(out_dir,
                                      'SIT209_LOOKUP_CODES.csv'),low_memory=False)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+    print(df.shape)
+    df.drop_duplicates(inplace=True)
+    print(df.shape)
     
     # Initial cleaning steps
     df = _record_delete_and_merge(df)
     df = _patch_missing_sitrep_fields(df)
-   
     df = _clean_and_format_date_and_time_fields(df)
     df = _derive_new_fields(df)
-    
     df = _general_field_cleaning(df)
     df = _standardized_field_cleaning(df,lu_df)
     df = _create_incident_id(df)
     df = _latitude_longitude_updates(df)
     df = _link_prot_unit(df) # added for 2.0
     
+    
     # save id xref and output files
     dfIDxref = df[['INC_IDENTIFIER','INCIDENT_ID']]
     dfIDxref = dfIDxref.drop_duplicates()
     df_str_ext = _get_str_ext(lu_df)
-    df_str_ext.to_csv('../../data/tmp/str_out.csv')
+    df_str_ext.to_csv(os.path.join(tmp_dir,'str_out.csv'))
     df_ext = pd.merge(df,df_str_ext,on=['INC209R_IDENTIFIER'],how='left')
     print("After structure merge: {}".format(df_ext.shape))
     df_res_ext = _get_res_ext(lu_df)

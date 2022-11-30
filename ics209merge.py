@@ -4,6 +4,7 @@ import datetime as dt
 import ics209util
 import earthpy as et
 import os
+import ast
 
 lgcy_timespan = '1999to2002'
 hist_timespan = '2001to2013'
@@ -19,7 +20,6 @@ cpx_dir = os.path.join(data_dir,'raw','cpx_assocs')
 fired_dir = os.path.join(data_dir,'raw','inc_fired')
 latlon_dir = os.path.join(data_dir,'raw','latlong_clean')
 
-#fod_version = '20210104'
 fod_version = '20220819'
 cpx_version= '20190815'
 
@@ -41,7 +41,7 @@ def _historical1_rename_columns(df_h1):
     df_h1.columns = df_h1.columns.str.replace('PERSONNEL','TOTAL_PERSONNEL')
     df_h1.columns = df_h1.columns.str.replace('ENAME','INCIDENT_NAME')
     df_h1.columns = df_h1.columns.str.replace('UN_UNITID','UNIT_OR_OTHER_NARR')
-    df_h1['FIRE_EVENT_ID'] = df_h1.FIRE_INCIDENT_NUMBER
+    df_h1['FIRE_EVENT_ID'] = df_h1.INCIDENT_NUMBER
     
     return df_h1
 
@@ -75,7 +75,7 @@ def _historical2_rename_columns(df_h2):
 
 def _final_alignments(df):
     # lookup codes:
-    lu_tbl = pd.read_csv('../../data/out/SIT209_LOOKUP_CODES.csv')
+    lu_tbl = pd.read_csv(os.path.join(out_dir,'SIT209_LOOKUP_CODES.csv'))
     
     #incident type
     df['INCTYP_IDENTIFIER'] = df.INCTYP_IDENTIFIER.astype(int) # reads in as float for some reason
@@ -100,35 +100,132 @@ def _final_alignments(df):
     df.loc[(df.DISCOVERY_DATE_CORRECTED.notnull()) & (df.INCTYP_ABBREVIATION.isin(['WF','WFU'])) & \
            (df.DISCOVERY_DATE != df.DISCOVERY_DATE_CORRECTED),'DISCOVERY_DATE'] = df.DISCOVERY_DATE_CORRECTED
     
+    df.loc[~df.POO_COUNTY.isnull(),'POO_COUNTY'] = df.POO_COUNTY.astype(str).str.title()
+    df.loc[~df.POO_CITY.isnull(),'POO_CITY'] = df.POO_CITY.astype(str).str.title()
+    
     return df
 
 def _drop_extra_columns(df):
-    df = df.drop(['ACTIVE','ADDNTL_FUEL_MODEL_IDENTIFIER','APPROVED_BY','APPROVED_DATE',\
-                 'AREA_MEASUREMENT','CAUSE_IDENTIFIER','COMMUNITIES_THREATENED_12',\
-                 'COMMUNITIES_THREATENED_24','COMMUNITIES_THREATENED_48','COMMUNITIES_THREATENED_72',\
-                 'COMPLEXITY_LEVEL_IDENTIFIER','CONTROLLED_DATE','CREATED_BY','CREATED_DATE',\
-                 'CRITICAL_RES','CRITICAL_RES24','CRITICAL_RES48','CRITICAL_RES72','CRIT_RES_NEEDS_12',\
-                 'CRIT_RES_NEEDS_24','CRIT_RES_NEEDS_48','CRIT_RES_NEEDS_72','CRIT_RES_NEEDS_GT72',\
-                 'CURRENT_THREAT_12','CURRENT_THREAT_24','CURRENT_THREAT_48','CURRENT_THREAT_72',\
-                 'CURRENT_THREAT_GT72','CURR_INC_AREA_UOM_IDENTIFIER','DATA_ENTRY_STATUS',\
-                 'DONWCGU_PROT_UNIT_IDENTIFIER','DOU_IDENTIFIER','EST_CONTROL','FUEL_MODEL_IDENTIFIER',\
-                 'FIRE_BEHAVIOR_1_IDENTIFIER','FIRE_BEHAVIOR_2_IDENTIFIER','FIRE_BEHAVIOR_3_IDENTIFIER',\
-                 'GACC_OBS_FIRE_BEHAVE','GACC_PLANNED_ACTIONS','GACC_REMARKS','GACC_SIGNIF_EVENTS_SUMMARY',\
-                 'GEN_FIRE_BEHAVIOR_IDENTIFIER','ID',\
-                 'HOUR','INC_MGMT_ORG_IDENTIFIER','INC_MGMT_ORG_ABBREV','ITYPE','LAST_MODIFIED_BY',\
-                 'LAST_MODIFIED_DATE','LATDEG','LATMIN','LONGDEG','LONGMIN','LINE_MEASUREMENT',\
-                 'LINE_TO_BUILD','LINE_TO_BUILD_NUM','LOCAL_TIMEZONE_IDENTIFIER','MANAGEMENT_CODE',\
-                 'NEWACRES','NO_EVACUATION','NO_LIKELY','OWNERSHIP_STATE','OWNERSHIP_STATE','OWNERSHIP_UNITID',\
-                 'PCT_CONT_COMPL_UOM_IDENTIFIER','PERCENT_MMA','POO_DONWCGU_OWN_IDENTIFIER','POO_LD_PM_IDENTIFIER',\
-                 'INCTYP_IDENTIFIER','PREPARED_BY','PREPARED_DATE','FOD_LATITUDE','FOD_LONGITUDE',\
-                 'PRIMARY_FUEL_MODEL','PROJECTED_ACTIVITY_12','PROJECTED_ACTIVITY_24','PROJECTED_ACTIVITY_48',\
-                 'PROJECTED_ACTIVITY_72','PROJECTED_ACTIVITY_GT72','PROJECTED_MOVEMENT','PROJECTED_MOVEMENT24',\
-                 'PROJECTED_MOVEMENT48','PROJECTED_MOVEMENT72','PROJ_INC_AREA_UOM_IDENTIFIER','REPORT_DATE',\
-                 'REPORT_NUMBER','RES_THREAT','SENT_FROM','SEQ_NUM','SINGLE_COMPLEX_FLAG','STRATEGIC_DISCUSSION',\
-                 'STRATEGIC_OBJECTIVES','SUBMITTED_DATE','SUBMITTED_TO','C_RH','C_TEMP','C_WIND_SPEED',\
-                 'C_WIND_DIRECTION','F_RH','F_TEMP','F_WIND_SPEED','F_WIND_DIRECTION',\
-                 'WFIP_STAGE','lat_c','long_c','TYPE_INC','DISCOVERY_DATE_CORRECTED', 'FIRE_INCIDENT_NUMBER',\
-                  'INCIDENT_NAME_CORRECTED','INCIDENT_NUMBER_CORRECTED','SECNDRY_FUEL_MODEL_IDENTIFIER'
+    df = df.drop(['ACTIVE',
+                  'ADDNTL_FUEL_MODEL_IDENTIFIER',
+                  'APPROVED_BY',
+                  'APPROVED_DATE',
+                  'AREA_MEASUREMENT',
+                  'C_RH',
+                  'C_TEMP',
+                  'C_WIND_SPEED',
+                  'C_WIND_DIRECTION',
+                  'CAUSE_IDENTIFIER',
+                  'COMMUNITIES_THREATENED_12',
+                  'COMMUNITIES_THREATENED_24',
+                  'COMMUNITIES_THREATENED_48',
+                  'COMMUNITIES_THREATENED_72',
+                  'COMPLEXITY_LEVEL_IDENTIFIER',
+                  'CONTROLLED_DATE','CREATED_BY',
+                  'CREATED_DATE',
+                  'CRITICAL_RES',
+                  'CRITICAL_RES24',
+                  'CRITICAL_RES48',
+                  'CRITICAL_RES72',
+                  'CRIT_RES_NEEDS_12',
+                  'CRIT_RES_NEEDS_24',
+                  'CRIT_RES_NEEDS_48',
+                  'CRIT_RES_NEEDS_72',
+                  'CRIT_RES_NEEDS_GT72',
+                  'CURR_INC_AREA_UOM_IDENTIFIER',
+                  'CURRENT_THREAT_12',
+                  'CURRENT_THREAT_24',
+                  'CURRENT_THREAT_48',
+                  'CURRENT_THREAT_72',
+                  'CURRENT_THREAT_GT72',
+                  'DATA_ENTRY_STATUS',
+                  'DISCOVERY_DATE_CORRECTED', 
+                  'DONWCGU_PROT_UNIT_IDENTIFIER',
+                  'DOU_IDENTIFIER',
+                  'END_YEAR',
+                  'EST_CONTROL',
+                  'F_RH',
+                  'F_TEMP',
+                  'F_WIND_SPEED',
+                  'F_WIND_DIRECTION',
+                  'FIRE_BEHAVIOR_1_IDENTIFIER',
+                  'FIRE_BEHAVIOR_2_IDENTIFIER',
+                  'FIRE_BEHAVIOR_3_IDENTIFIER',
+                  'FIRE_INCIDENT_NUMBER',
+                  'FIRECODE',
+                  'FOD_LATITUDE',
+                  'FOD_LONGITUDE',
+                  'FUEL_MODEL_IDENTIFIER',
+                  'GACC_OBS_FIRE_BEHAVE',
+                  'GACC_PLANNED_ACTIONS',
+                  'GACC_REMARKS',
+                  'GACC_SIGNIF_EVENTS_SUMMARY',
+                  'GEN_FIRE_BEHAVIOR_IDENTIFIER',
+                  'HOUR',
+                  'ID',
+                  'INC_IDENTIFIER_OLD',
+                  'INC_MGMT_ORG_IDENTIFIER',
+                  'INC_MGMT_ORG_ABBREV',
+                  'INCIDENT_NAME_CORRECTED',
+                  'INCIDENT_NUMBER_CORRECTED',
+                  'INCTYP_IDENTIFIER',
+                  'ITYPE',
+                  'LAST_MODIFIED_BY',
+                  'LAST_MODIFIED_DATE',
+                  'lat_c',
+                  'LATDEG',
+                  'LATMIN',
+                  'LAST_EDIT',
+                  'LINE_MEASUREMENT',
+                  'LONGDEG',
+                  'LONGMIN',
+                  'LINE_TO_BUILD',
+                  'LINE_TO_BUILD_NUM',
+                  'LOCAL_TIMEZONE_IDENTIFIER',
+                  'long_c',
+                  'MANAGEMENT_CODE',
+                  'NEWACRES',
+                  'NO_EVACUATION',
+                  'NO_LIKELY',
+                  'OWNERSHIP_STATE',
+                  'OWNERSHIP_STATE',
+                  'OWNERSHIP_UNITID',
+                  'PCT_CONT_COMPL_UOM_IDENTIFIER',
+                  'PERCENT_MMA',
+                  'POO_COUNTY_CODE',
+                  'POO_DONWCGU_OWN_IDENTIFIER',
+                  'POO_LD_PM_IDENTIFIER',
+                  'POO_LD_QTR_QTR_QTR_QTR_SEC',
+                  'POO_LD_QTR_QTR_QTR_SEC',
+                  'POO_STATE_CODE',
+                  'PREPARED_BY',
+                  'PREPARED_DATE',
+                  'PRIMARY_FUEL_MODEL',
+                  'PROJ_INC_AREA_UOM_IDENTIFIER',
+                  'PROJECTED_ACTIVITY_12',
+                  'PROJECTED_ACTIVITY_24',
+                  'PROJECTED_ACTIVITY_48',
+                  'PROJECTED_ACTIVITY_72',
+                  'PROJECTED_ACTIVITY_GT72',
+                  'PROJECTED_MOVEMENT',
+                  'PROJECTED_MOVEMENT24',
+                  'PROJECTED_MOVEMENT48',
+                  'PROJECTED_MOVEMENT72',
+                  'REPORT_DATE',
+                  'REPORT_NUMBER',
+                  'RES_THREAT',
+                  'SECNDRY_FUEL_MODEL_IDENTIFIER',
+                  'SENT_DATE',
+                  'SENT_TO',
+                  'SENT_FROM',
+                  'SEQ_NUM',
+                  'SINGLE_COMPLEX_FLAG',
+                  'STRATEGIC_DISCUSSION',
+                  'STRATEGIC_OBJECTIVES',
+                  'SUBMITTED_DATE',
+                  'SUBMITTED_TO',
+                  'TYPE_INC',
+                  'WFIP_STAGE'
                  ],axis=1)
  
     return df
@@ -358,6 +455,7 @@ def _cost_adjustments(df):
 
 def _event_forward_fill(df):
     rows = df.shape[0]
+    df = df.copy()
     print("Forward fill cost estimates & acres fields...")
     #for i in range(0,25): #test loop
     for i in range(0,rows-1):
@@ -457,6 +555,7 @@ def _event_smoothing_pass(df):
     return df
         
 def _other_field_smoothing(df):
+    df = df.copy()
     df = df.sort_values(['INCIDENT_ID','REPORT_TO_DATE'])
     df = df.reset_index(drop=True)
     
@@ -504,13 +603,19 @@ def _calculate_fire_statistics(df):
     df.loc[df.REPORT_DAY_SPAN == 0.0,'REPORT_DAY_SPAN'] = 1.0
     df['WF_FSR'] = df.NEW_ACRES/df.REPORT_DAY_SPAN
     # calculate % relative final size
-    df.loc[df.ACRES.notnull() & df.EVENT_FINAL_ACRES.notnull(),'EVENT_PCT_FINAL_SIZE'] = df.ACRES/df.EVENT_FINAL_ACRES
+    #df.loc[df.ACRES.notnull() & df.EVENT_FINAL_ACRES.notnull(),'EVENT_PCT_FINAL_SIZE'] = df.ACRES/df.EVENT_FINAL_ACRES
     df.loc[df.ACRES.notnull() & df.FIRE_MAX_ACRES.notnull(),'MAX_FIRE_PCT_FINAL_SIZE'] = df.ACRES/df.FIRE_MAX_ACRES
-    df = df.drop(['EVENT_PCT_FINAL_SIZE'],axis=1)
+    #df = df.drop(['EVENT_FINAL_ACRES'],axis=1)
     df = df.drop(['FIRE_MAX_ACRES'],axis=1)
         
     return df
 
+def final_drop_extra_columns(df):
+    df = df.drop(['EVENT_ID',
+                  'MAX_FIRE_PCT_FINAL_SIZE'
+                 ],axis=1)
+ 
+    return df
 
 def _create_incident_summary(wfdf):
     
@@ -667,36 +772,10 @@ def _create_incident_summary(wfdf):
     return wfincdf
 
 
-def _create_complex_associations():
-   
-    # Read in historical linking file and extract rows for complexes
-    df_short = pd.read_excel('../../data/raw/excel/Short1999to2013v2.xlsx')
-    cpx = df_short.loc[df_short.KS_COMPLEX_NAME.notnull()].copy()
-    # Strip the incident id column
-    cpx['INCIDENT_ID_KS'] = cpx.INCIDENT_ID_KS.str.strip().str.upper()
-    # Groupby and count the number of rows associated with this ID, rename to CPLX_INCIDENT_ID
-    cpxG = cpx.groupby(['INCIDENT_ID_KS']).INCIDENT_ID_KS.count().reset_index(name='NUM_FOD_RECORDS')
-    cpxG.columns = ['CPLX_INCIDENT_ID','NUM_FOD_RECORDS']
-    # Extract columns from INCIDENT ID
-    cpxG[['FIRE_YEAR','INCIDENT_NUMBER','COMPLEX_NAME']] = cpxG.CPLX_INCIDENT_ID.str.split('_',expand=True)
-    
-    # Read in current cpx asc definitions
-    cpx_curr = pd.read_csv('../../data/raw/cpx_assocs/cpx-assocs2014to2018.csv')
-    cpx_curr = cpx_curr.loc[:, ~cpx_curr.columns.str.contains('^Unnamed')]
-    # Set FODJ_INCIDENT_ID
-    cpx_curr.loc[(cpx_curr.MEMBER_INC_IDENTIFIER == cpx_curr.CPLX_INC_IDENTIFIER),'INCIDENT_ID'] = cpx_curr.CPLX_INCIDENT_ID
-    cpx_curr.loc[(cpx_curr.MEMBER_INC_IDENTIFIER != cpx_curr.CPLX_INC_IDENTIFIER),'INCIDENT_ID'] = cpx_curr.MEMBER_INCIDENT_ID
-    
-    # Concatenate and sort
-    cpx_all = pd.concat([cpxG, cpx_curr])
-    cpx_all.sort_values(by=['INCIDENT_ID'], inplace=True)
-    cpx_all.to_csv('../../data/tmp/cpx-fod-all.csv')
-    
-    return cpx_all
-
 def get_largest_fod_fire(fod_fire_list):
     for i in range(0,len(fod_fire_list)):
-        fod_fire_list[i] = eval(fod_fire_list[i])
+        if isinstance(fod_fire_list[i],str):
+            fod_fire_list[i] = eval(fod_fire_list[i])
     df = pd.DataFrame(fod_fire_list)
     max_row = df.loc[df.SIZE == df.SIZE.max()]
     return max_row
@@ -715,9 +794,7 @@ def _fod_merge(fod_agg, inc_df):
     fod_fires = fod_fires[['FODJ_INCIDENT_ID','FOD_FIRE_LIST']]
     fod_fires.to_csv(os.path.join(tmp_dir,'fod-fires.csv'))
     
-    return inc_df
     
-    '''
     for i in range(0,fod_fires.shape[0]):
     #for i in range(0,4):
         max_row = get_largest_fod_fire(fod_fires.iloc[i].FOD_FIRE_LIST)
@@ -729,8 +806,7 @@ def _fod_merge(fod_agg, inc_df):
             inc_df.loc[inc_df[merge_col] == fod_fires.iloc[i][merge_col], 'LRGST_MTBS_FIRE_INFO'] = max_row.iloc[0]['MTBS_ID']
     inc_df['LRGST_FOD_COORDS'] = inc_df[['LRGST_FOD_LATITUDE', 'LRGST_FOD_LONGITUDE']].apply(tuple, axis=1)
     
-    fod_fires.to_csv(os.path.join(tmp_dir,'fod-fire-data.csv'))
-    '''
+    fod_fires.to_csv(os.path.join(tmp_dir,'fod-fire-data.csv')) 
     
     return inc_df
 
@@ -855,7 +931,6 @@ def fod_aggregation(inc_df,cpx_df):
     return inc_fod,cpx_fod
 
 
-
 def _join_with_fod_database(inc_df):
     
     cpx_df = pd.read_csv(os.path.join(cpx_dir, 'cpx-assocs{}.csv'.format(final_timespan)),
@@ -882,15 +957,17 @@ def _join_with_fired_database(inc_fod):
                      
 def create_final_datasets():
     
-    
     # read cleaned version
-    df_h1 = pd.read_csv('../../data/out/IMSR_INCIDENT_INFORMATIONS_{}_cleaned.csv'.format(lgcy_timespan),low_memory=False)
+    df_h1 = pd.read_csv(os.path.join(out_dir,'IMSR_INCIDENT_INFORMATIONS_{}_cleaned.csv'.format(lgcy_timespan)),low_memory=False)
     df_h1 = df_h1.loc[:, ~df_h1.columns.str.contains('^Unnamed')]
-    df_h2 = pd.read_csv('../../data/out/IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv'.format(hist_timespan),low_memory=False)
+    print(df_h1.shape)
+    df_h2 = pd.read_csv(os.path.join(out_dir,'IMSR_IMSR_209_INCIDENTS_{}_cleaned.csv'.format(hist_timespan)),low_memory=False)
     df_h2 = df_h2.loc[:, ~df_h2.columns.str.contains('^Unnamed')]
-    df_curr = pd.read_csv('../../data/out/SIT209_HISTORY_INCIDENT_209_REPORTS_{}_cleaned.csv'.format(curr_timespan),\
+    print(df_h2.shape)
+    df_curr = pd.read_csv(os.path.join(out_dir,'SIT209_HISTORY_INCIDENT_209_REPORTS_{}_cleaned.csv'.format(curr_timespan)),
                           low_memory=False)
     df_curr = df_curr.loc[:, ~df_curr.columns.str.contains('^Unnamed')]
+    print(df_curr.shape)
     
     # rename columns so that matching columns align
     df_h1 = _historical1_rename_columns(df_h1)
@@ -898,53 +975,54 @@ def create_final_datasets():
     
     # concatenate all three datasets
     df = pd.concat([df_h1,df_h2,df_curr],sort=True)
+    print(df.shape)
     
     df = _final_alignments(df)
     
     df = _drop_extra_columns(df)
-    df.to_csv("../../data/tmp/after_drop_{}.csv".format(final_timespan))
+    print(df.shape)
+    df.to_csv(os.path.join(tmp_dir,"after_drop_{}.csv".format(final_timespan)))
     
     
     # event level smoothing
     df = _event_smoothing_prep(df)
     df = _cost_adjustments(df)
-   
     df = _event_forward_fill(df)
-    
     df = _event_smoothing_pass(df)
-   
     # other field cleaning
     df = _other_field_smoothing(df)
     
     # save merged/cleaned versions
-    df.to_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan))
+    df.to_csv(os.path.join(out_dir,'ics209-plus_sitreps_{}.csv'.format(final_timespan)))
     
-    #df = pd.read_csv('../../data/out/ics209-plus_sitreps_{}.csv'.format(final_timespan),low_memory=False)
+    df = pd.read_csv(os.path.join(out_dir,'ics209-plus_sitreps_{}.csv'.format(final_timespan)),low_memory=False)
+    
+    # Wildfire dataset from here down
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     wfdf = df.loc[df.INCTYP_ABBREVIATION.isin(['WF','WFU','RX','CX'])]
     wfdf.sort_values(['INCIDENT_ID','REPORT_TO_DATE'])
     
     wfdf = _calculate_fire_statistics(wfdf)
-    wfdf.to_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan))
-    print("statistics caculated.")
+    print("statistics calculated.")
     
-    #wfdf = pd.read_csv('../../data/out/ics209-plus-wf_sitreps_{}.csv'.format(final_timespan),low_memory=False)
-    wfdf = wfdf.loc[:, ~wfdf.columns.str.contains('^Unnamed')]
+    #wfdf = pd.read_csv(os.path.join(out_dir,'ics209-plus-wf_sitreps_{}.csv'.format(final_timespan)),low_memory=False)
+    #wfdf = wfdf.loc[:, ~wfdf.columns.str.contains('^Unnamed')]
     # create the incident level summary
-
     inc_df = _create_incident_summary(wfdf)
     # Save incident temp incident summary
-    inc_df.to_csv('../../data/tmp/create-incident-summary-out.csv')
+    inc_df.to_csv(os.path.join(tmp_dir,'create-incident-summary-out.csv'))
     
-    
-    #inc_df = pd.read_csv('../../data/tmp/create-incident-summary-out.csv',low_memory=False)
-    #inc_df = inc_df.loc[:, ~inc_df.columns.str.contains('^Unnamed')]
+    #inc_df = pd.read_csv(os.path.join(tmp_dir,'create-incident-summary-out.csv'),low_memory=False)
+    inc_df = inc_df.loc[:, ~inc_df.columns.str.contains('^Unnamed')]
     inc_fod,cpx_fod = _join_with_fod_database(inc_df)
     inc_fired = _join_with_fired_database(inc_fod)
-    inc_fired.to_csv('../../data/out/ics209-plus-wf_incidents_{}.csv'.format(final_timespan))
-    cpx_fod.to_csv('../../data/out/ics209-plus-wf_complex_associations_{}.csv'.format(final_timespan))
-    #cpx_fod.to_csv('../../data/out/ics209-plus-wf_complex_associations_{}.csv'.format(final_timespan))
-
-
+    
+    # Save final output
+    inc_fired.to_csv(os.path.join(out_dir,'ics209-plus-wf_incidents_{}.csv'.format(final_timespan)))
+    cpx_fod.to_csv(os.path.join(out_dir,'ics209-plus-wf_complex_associations_{}.csv'.format(final_timespan)))
+    wfdf = final_drop_extra_columns(wfdf)
+    wfdf.to_csv(os.path.join(out_dir,'ics209-plus-wf_sitreps_{}.csv'.format(final_timespan)))
+    
     
 
     

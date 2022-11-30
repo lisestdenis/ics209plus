@@ -377,6 +377,9 @@ def historical1_merge_prep():
     lu_df = pd.read_csv(os.path.join(out_dir,
                                      "IMSR_LOOKUPS.csv"))
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+    print(df.shape)
+    df.drop_duplicates(inplace=True)
+    print(df.shape)
     df = _split_duplicate_incident_numbers(df)
     df = _clean_and_format_date_and_time_fields(df)
     df = _derive_new_fields(df)
